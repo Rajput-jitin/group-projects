@@ -165,14 +165,20 @@ def main():
 
     db = SessionLocal()
     try:
-        existing_count = db.query(Scheme).count()
-        if existing_count > 0:
-            print(f"Database already has {existing_count} schemes — skipping seed.")
-            return
-
         print(f"Loading schemes from: {CSV_PATH}")
         schemes = load_schemes_from_csv(CSV_PATH)
         print(f"Found {len(schemes)} unique schemes in CSV.")
+
+        existing_count = db.query(Scheme).count()
+        if existing_count >= len(schemes):
+            print(f"Database already has {existing_count} schemes (CSV has {len(schemes)}) — skipping seed.")
+            return
+
+        # Clear old data and re-seed with full CSV
+        if existing_count > 0:
+            print(f"Database has {existing_count} schemes but CSV has {len(schemes)} — re-seeding...")
+            db.query(Scheme).delete()
+            db.commit()
 
         for data in schemes:
             db.add(Scheme(**data))
