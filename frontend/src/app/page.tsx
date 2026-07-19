@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://group-projects.onrender.com'
+const BACKEND_URL = (process.env.NEXT_PUBLIC_BACKEND_URL || 'https://group-projects.onrender.com').replace(/\/$/, '')
 
 const schemes_INITIAL = [
   { id: '1', name: 'PM Kisan Samman Nidhi', ministry: 'Ministry of Agriculture', category: 'Farmer', benefit: '₹6,000/year', popularity: 98, status: 'Open', applyUrl: 'https://pmkisan.gov.in' },
