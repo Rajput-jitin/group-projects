@@ -56,6 +56,13 @@ class Scheme(Base):
     benefits_type: Mapped[BenefitTypeEnum] = mapped_column(Enum(BenefitTypeEnum), nullable=False)
     status: Mapped[SchemeStatusEnum] = mapped_column(Enum(SchemeStatusEnum), default=SchemeStatusEnum.open, index=True)
 
+    # --- Rich Scraped Details ---
+    details_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    documents_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    process_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    eligibility_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
     # --- Eligibility criteria (used by the rule-based eligibility engine) ---
     min_age: Mapped[int | None] = mapped_column(Integer, nullable=True)
     max_age: Mapped[int | None] = mapped_column(Integer, nullable=True)

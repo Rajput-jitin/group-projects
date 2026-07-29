@@ -35,6 +35,12 @@ class SchemeBase(BaseModel):
     application_start_date: date | None = None
     application_deadline: date | None = None
 
+    details_json: dict | None = None
+    documents_text: str | None = None
+    process_text: str | None = None
+    eligibility_text: str | None = None
+
+
 
 class SchemeCreate(SchemeBase):
     pass
