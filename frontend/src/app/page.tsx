@@ -94,19 +94,27 @@ export default function Home() {
   ]);
 
   useEffect(() => {
-    fetchSchemes();
-  }, []);
+    fetchSchemes(category, 1);
+  }, [category]);
 
-  async function fetchSchemes() {
+  async function fetchSchemes(cat: string, pageNum: number = 1) {
     setLoading(true);
     try {
-      const PAGE_SIZE = 500;
-      // First fetch to get total
-      const firstRes = await fetch(`${BACKEND_URL}/api/schemes?page=1&page_size=${PAGE_SIZE}`);
-      if (!firstRes.ok) return;
-      const firstData = await firstRes.json();
-      const total: number = firstData.total || 0;
-      const totalPages = Math.ceil(total / PAGE_SIZE);
+      // Find matching scheme_type for backend filter if category is selected
+      const backendSchemeType = Object.keys(TYPE_MAP).find(
+        (key) => TYPE_MAP[key] === cat
+      );
+
+      const PAGE_SIZE = cat === 'all' ? 100 : 40;
+      let url = `${BACKEND_URL}/api/schemes?page=${pageNum}&page_size=${PAGE_SIZE}`;
+      if (cat !== 'all' && backendSchemeType) {
+        url += `&scheme_type=${backendSchemeType}`;
+      }
+
+      const res = await fetch(url);
+      if (!res.ok) return;
+      const data = await res.json();
+      const items = data.items || [];
 
       const mapScheme = (s: any) => ({
         id: s.id,
@@ -130,22 +138,8 @@ export default function Home() {
         income_max: s.income_max,
       });
 
-      let allItems = (firstData.items || []).map(mapScheme);
-
-      // Fetch remaining pages in parallel
-      if (totalPages > 1) {
-        const pageNums = Array.from({ length: totalPages - 1 }, (_, i) => i + 2);
-        const results = await Promise.all(
-          pageNums.map(page =>
-            fetch(`${BACKEND_URL}/api/schemes?page=${page}&page_size=${PAGE_SIZE}`)
-              .then(r => r.ok ? r.json() : { items: [] })
-              .then(d => (d.items || []).map(mapScheme))
-          )
-        );
-        for (const batch of results) allItems = allItems.concat(batch);
-      }
-
-      setSchemes(allItems);
+      const mapped = items.map(mapScheme);
+      setSchemes(mapped);
     } catch (e) {
       console.warn('Backend offline, using fallback schemes', e);
     } finally {
@@ -158,11 +152,9 @@ export default function Home() {
       s.name.toLowerCase().includes(query.toLowerCase()) ||
       s.ministry.toLowerCase().includes(query.toLowerCase()) ||
       (s.benefit && s.benefit.toLowerCase().includes(query.toLowerCase()));
-    const matchC = category === 'all' || s.category === category;
-    return matchQ && matchC;
+    return matchQ;
   });
 
-  // Reset display count whenever the category or search query changes
   const handleCategoryChange = (newCat: string) => {
     setCategory(newCat);
     setDisplayCount(newCat === 'all' ? 60 : 40);
