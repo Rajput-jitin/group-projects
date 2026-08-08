@@ -14,11 +14,11 @@ export default function RegisterPage() {
     password: '',
     mobile: '',
     age: '',
-    gender: 'Male',
+    gender: 'male',
     state: 'Delhi',
-    occupation: 'Student',
-    annual_income: 'Below ₹1 Lakh',
-    category: 'General',
+    occupation: 'student',
+    annual_income: '50000',
+    category: 'general',
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,6 +38,7 @@ export default function RegisterPage() {
       const payload = {
         ...formData,
         age: formData.age ? parseInt(formData.age, 10) : undefined,
+        annual_income: parseInt(formData.annual_income, 10),
       };
 
       const res = await fetch(`${backendUrl}/api/auth/register`, {
@@ -181,9 +182,9 @@ export default function RegisterPage() {
                 onChange={handleChange}
                 className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 text-sm bg-slate-50/50"
               >
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
-                <option value="Other">Other</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+                <option value="other">Other</option>
               </select>
             </div>
 
@@ -213,11 +214,11 @@ export default function RegisterPage() {
                 onChange={handleChange}
                 className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 text-sm bg-slate-50/50"
               >
-                <option value="General">General</option>
-                <option value="OBC">OBC</option>
-                <option value="SC">SC</option>
-                <option value="ST">ST</option>
-                <option value="EWS">EWS</option>
+                <option value="general">General</option>
+                <option value="obc">OBC</option>
+                <option value="sc">SC</option>
+                <option value="st">ST</option>
+                <option value="ews">EWS</option>
               </select>
             </div>
           </div>
@@ -233,12 +234,13 @@ export default function RegisterPage() {
                 onChange={handleChange}
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 text-sm bg-slate-50/50"
               >
-                <option value="Student">Student</option>
-                <option value="Farmer">Farmer</option>
-                <option value="Employed">Employed</option>
-                <option value="Unemployed">Unemployed</option>
-                <option value="Self-Employed">Self-Employed</option>
-                <option value="Senior Citizen">Senior Citizen</option>
+                <option value="student">Student</option>
+                <option value="farmer">Farmer</option>
+                <option value="private_employee">Employed (Private)</option>
+                <option value="government_employee">Employed (Govt)</option>
+                <option value="unemployed">Unemployed</option>
+                <option value="business_owner">Business Owner</option>
+                <option value="senior_citizen">Senior Citizen</option>
               </select>
             </div>
 
@@ -252,11 +254,11 @@ export default function RegisterPage() {
                 onChange={handleChange}
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 text-sm bg-slate-50/50"
               >
-                <option value="Below ₹1 Lakh">Below ₹1 Lakh</option>
-                <option value="₹1-3 Lakh">₹1-3 Lakh</option>
-                <option value="₹3-5 Lakh">₹3-5 Lakh</option>
-                <option value="₹5-8 Lakh">₹5-8 Lakh</option>
-                <option value="Above ₹8 Lakh">Above ₹8 Lakh</option>
+                <option value="50000">Below ₹1 Lakh</option>
+                <option value="200000">₹1-3 Lakh</option>
+                <option value="400000">₹3-5 Lakh</option>
+                <option value="600000">₹5-8 Lakh</option>
+                <option value="1000000">Above ₹8 Lakh</option>
               </select>
             </div>
           </div>

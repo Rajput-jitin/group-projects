@@ -1,0 +1,28 @@
+services:
+  # Python FastAPI Backend Web Service
+  - type: web
+    name: schemeseva-backend
+    env: python
+    region: singapore
+    rootDir: schemeseva-backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: CORS_ORIGINS
+        value: https://group-projects.onrender.com,http://localhost:3000
+
+  # Next.js Frontend Web Service
+  - type: web
+    name: schemeseva-frontend
+    env: node
+    region: singapore
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NEXT_PUBLIC_BACKEND_URL
+        value: https://group-projects.onrender.com

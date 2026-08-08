@@ -4,8 +4,9 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import SchemeDetailModal from '@/components/SchemeDetailModal';
 import { Search, Sparkles, Filter, Award, ChevronRight, MessageSquare, Bot, User, ArrowUpRight, CheckCircle2, ShieldCheck, Heart, ExternalLink } from 'lucide-react';
+import { getBackendUrl } from '@/lib/api';
 
-const BACKEND_URL = (process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8001').replace(/\/$/, '');
+const BACKEND_URL = getBackendUrl();
 
 const CATEGORIES = [
   { id: 'all', label: 'All Schemes', emoji: '🇮🇳' },
@@ -221,56 +222,6 @@ export default function Home() {
       {selectedScheme && (
         <SchemeDetailModal scheme={selectedScheme} onClose={() => setSelectedScheme(null)} />
       )}
-
-      {/* Modern Sticky Navigation */}
-      <nav className="bg-white/80 backdrop-blur-md border-b border-slate-200/80 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-emerald-500 flex items-center justify-center text-white font-black text-xl shadow-md">
-              ✨
-            </div>
-            <div>
-              <span className="font-extrabold text-lg tracking-tight text-slate-900">
-                SchemeSeva <span className="text-blue-600">AI</span>
-              </span>
-              <span className="block text-[10px] text-slate-500 -mt-1 font-medium">
-                4,700+ Government Schemes Portal
-              </span>
-            </div>
-          </div>
-
-          <div className="hidden md:flex items-center gap-6 text-xs font-bold text-slate-600">
-            <a href="#browse-schemes" className="hover:text-blue-600 transition">
-              Browse Schemes
-            </a>
-            <a href="#categories" className="hover:text-blue-600 transition">
-              Categories
-            </a>
-            <Link href="/ocr" className="hover:text-blue-600 transition">
-              Document OCR
-            </Link>
-            <Link href="/form" className="hover:text-blue-600 transition">
-              Apply Form
-            </Link>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setLang((l) => (l === 'en' ? 'hi' : 'en'))}
-              className="px-3 py-1.5 rounded-full border border-slate-200 bg-white text-xs font-bold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
-            >
-              {lang === 'en' ? '🇮🇳 HI' : '🇬🇧 EN'}
-            </button>
-            <button
-              onClick={() => setShowForm(true)}
-              className="px-4 py-2 rounded-full bg-gradient-to-r from-blue-600 to-emerald-600 text-white font-extrabold text-xs shadow-md hover:shadow-lg transition cursor-pointer flex items-center gap-1.5"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              {lang === 'en' ? 'Check Eligibility' : 'पात्रता जांचें'}
-            </button>
-          </div>
-        </div>
-      </nav>
 
       {/* Hero Section */}
       <section className="relative overflow-hidden py-16 sm:py-24 bg-gradient-to-b from-blue-50/50 via-white to-slate-50">

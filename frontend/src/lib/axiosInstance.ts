@@ -1,9 +1,8 @@
 import axios from 'axios';
-
-const BACKEND_URL = (process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000').replace(/\/$/, '');
+import { getBackendUrl } from './api';
 
 export const axiosInstance = axios.create({
-  baseURL: BACKEND_URL,
+  baseURL: getBackendUrl(),
   headers: {
     'Content-Type': 'application/json',
   },
