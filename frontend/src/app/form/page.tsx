@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ClipboardList, Sparkles, CheckCircle, AlertCircle, Loader2, ExternalLink } from 'lucide-react';
+import { ClipboardList, Sparkles, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { axiosInstance } from '@/lib/axiosInstance';
 
 interface SchemeResult {
@@ -37,28 +37,59 @@ export default function FormPage() {
   const [checkedCount, setCheckedCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
-  // Auto-fill from localStorage on mount
+  // Auto-fill from localStorage on mount — OCR data takes priority over profile
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const raw = localStorage.getItem('ocrData');
-    if (!raw) return;
-    try {
-      const data = JSON.parse(raw) as Record<string, string>;
-      const filled: Record<string, string> = {};
 
-      if (data.age && !isNaN(Number(data.age))) { setAge(data.age); filled['age'] = data.age; }
-      if (data.gender) { setGender(data.gender.toLowerCase()); filled['gender'] = data.gender; }
-      if (data.state) { setState(data.state); filled['state'] = data.state; }
-      if (data.annual_income) { setIncome(data.annual_income); filled['income'] = data.annual_income; }
-      if (data.category) { setCategory(data.category.toLowerCase()); filled['category'] = data.category; }
+    const filled: Record<string, string> = {};
 
-      setOcrSource(filled);
-    } catch {
-      // Ignore invalid JSON
+    // 1. Try to fill from saved user profile first
+    const rawUser = localStorage.getItem('user');
+    if (rawUser) {
+      try {
+        const user = JSON.parse(rawUser);
+        if (user.age && !isNaN(Number(user.age))) { setAge(String(user.age)); filled['age'] = 'profile'; }
+        if (user.gender) { setGender(user.gender.toLowerCase()); filled['gender'] = 'profile'; }
+        if (user.state) { setState(user.state); filled['state'] = 'profile'; }
+        if (user.annual_income) { setIncome(String(user.annual_income)); filled['income'] = 'profile'; }
+        if (user.category) { setCategory(user.category.toLowerCase()); filled['category'] = 'profile'; }
+        if (user.occupation) { setOccupation(user.occupation.toLowerCase()); filled['occupation'] = 'profile'; }
+        if (user.education) { setEducation(user.education.toLowerCase()); filled['education'] = 'profile'; }
+        if (user.disability_status !== undefined) { setDisability(Boolean(user.disability_status)); }
+      } catch { /* ignore */ }
     }
+
+    // 2. OCR data overrides profile (highest priority)
+    const rawOcr = localStorage.getItem('ocrData');
+    if (rawOcr) {
+      try {
+        const data = JSON.parse(rawOcr) as Record<string, string>;
+        if (data.age && !isNaN(Number(data.age))) { setAge(data.age); filled['age'] = 'ocr'; }
+        if (data.gender) { setGender(data.gender.toLowerCase()); filled['gender'] = 'ocr'; }
+        if (data.state) { setState(data.state); filled['state'] = 'ocr'; }
+        if (data.annual_income) { setIncome(data.annual_income); filled['income'] = 'ocr'; }
+        if (data.category) { setCategory(data.category.toLowerCase()); filled['category'] = 'ocr'; }
+      } catch { /* ignore */ }
+    }
+
+    setOcrSource(filled);
   }, []);
 
-  const isOcrField = (key: string) => key in ocrSource;
+  const getSource = (key: string) => ocrSource[key]; // 'ocr' | 'profile' | undefined
+
+  const SourceBadge = ({ fieldKey }: { fieldKey: string }) => {
+    const src = getSource(fieldKey);
+    if (!src) return null;
+    return src === 'ocr' ? (
+      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-violet-100 text-violet-600 rounded text-[10px] font-semibold">
+        <Sparkles className="w-2.5 h-2.5" /> OCR
+      </span>
+    ) : (
+      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-blue-100 text-blue-600 rounded text-[10px] font-semibold">
+        👤 Profile
+      </span>
+    );
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,7 +113,6 @@ export default function FormPage() {
       const res = await axiosInstance.post('/api/eligibility/check', payload);
       const data = res.data;
 
-      // Sort: eligible first, then by score
       const sorted: SchemeResult[] = (data.results || []).sort(
         (a: SchemeResult, b: SchemeResult) =>
           Number(b.is_eligible) - Number(a.is_eligible) || b.eligibility_score - a.eligibility_score
@@ -101,6 +131,9 @@ export default function FormPage() {
       setSubmitting(false);
     }
   };
+
+  const ocrCount = Object.values(ocrSource).filter(v => v === 'ocr').length;
+  const profileCount = Object.values(ocrSource).filter(v => v === 'profile').length;
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 md:p-8">
@@ -121,7 +154,9 @@ export default function FormPage() {
             <div className="mt-4 p-3 bg-violet-50 border border-violet-200 rounded-xl flex items-center gap-2 text-sm text-violet-700">
               <Sparkles className="w-4 h-4 shrink-0" />
               <span>
-                <strong>{Object.keys(ocrSource).length} fields</strong> were auto-filled from your scanned document.
+                Form auto-filled from <strong>{ocrCount > 0 ? `${ocrCount} OCR document fields` : ''}</strong>
+                {ocrCount > 0 && profileCount > 0 ? ' and ' : ''}
+                <strong>{profileCount > 0 ? `${profileCount} saved profile details` : ''}</strong>.
                 You can edit any field before submitting.
               </span>
             </div>
@@ -136,12 +171,7 @@ export default function FormPage() {
               {/* Age */}
               <div>
                 <label className="block text-xs font-semibold uppercase text-slate-500 mb-1 flex items-center gap-1.5">
-                  Age
-                  {isOcrField('age') && (
-                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-violet-100 text-violet-600 rounded text-[10px] font-semibold">
-                      <Sparkles className="w-2.5 h-2.5" /> OCR
-                    </span>
-                  )}
+                  Age <SourceBadge fieldKey="age" />
                 </label>
                 <input
                   type="number"
@@ -149,7 +179,7 @@ export default function FormPage() {
                   value={age}
                   onChange={(e) => setAge(e.target.value)}
                   className={`w-full px-4 py-2.5 border rounded-xl text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                    isOcrField('age') ? 'bg-violet-50 border-violet-200' : 'bg-slate-50 border-slate-200'
+                    getSource('age') === 'ocr' ? 'bg-violet-50 border-violet-200' : getSource('age') === 'profile' ? 'bg-blue-50/50 border-blue-200' : 'bg-slate-50 border-slate-200'
                   }`}
                 />
               </div>
@@ -157,18 +187,13 @@ export default function FormPage() {
               {/* Gender */}
               <div>
                 <label className="block text-xs font-semibold uppercase text-slate-500 mb-1 flex items-center gap-1.5">
-                  Gender
-                  {isOcrField('gender') && (
-                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-violet-100 text-violet-600 rounded text-[10px] font-semibold">
-                      <Sparkles className="w-2.5 h-2.5" /> OCR
-                    </span>
-                  )}
+                  Gender <SourceBadge fieldKey="gender" />
                 </label>
                 <select
                   value={gender}
                   onChange={(e) => setGender(e.target.value)}
                   className={`w-full px-4 py-2.5 border rounded-xl text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                    isOcrField('gender') ? 'bg-violet-50 border-violet-200' : 'bg-slate-50 border-slate-200'
+                    getSource('gender') === 'ocr' ? 'bg-violet-50 border-violet-200' : getSource('gender') === 'profile' ? 'bg-blue-50/50 border-blue-200' : 'bg-slate-50 border-slate-200'
                   }`}
                 >
                   <option value="male">Male</option>
@@ -180,18 +205,13 @@ export default function FormPage() {
               {/* State */}
               <div>
                 <label className="block text-xs font-semibold uppercase text-slate-500 mb-1 flex items-center gap-1.5">
-                  State
-                  {isOcrField('state') && (
-                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-violet-100 text-violet-600 rounded text-[10px] font-semibold">
-                      <Sparkles className="w-2.5 h-2.5" /> OCR
-                    </span>
-                  )}
+                  State <SourceBadge fieldKey="state" />
                 </label>
                 <select
                   value={state}
                   onChange={(e) => setState(e.target.value)}
                   className={`w-full px-4 py-2.5 border rounded-xl text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                    isOcrField('state') ? 'bg-violet-50 border-violet-200' : 'bg-slate-50 border-slate-200'
+                    getSource('state') === 'ocr' ? 'bg-violet-50 border-violet-200' : getSource('state') === 'profile' ? 'bg-blue-50/50 border-blue-200' : 'bg-slate-50 border-slate-200'
                   }`}
                 >
                   {STATES.map((s) => <option key={s} value={s}>{s}</option>)}
@@ -200,11 +220,15 @@ export default function FormPage() {
 
               {/* Occupation */}
               <div>
-                <label className="block text-xs font-semibold uppercase text-slate-500 mb-1">Occupation</label>
+                <label className="block text-xs font-semibold uppercase text-slate-500 mb-1 flex items-center gap-1.5">
+                  Occupation <SourceBadge fieldKey="occupation" />
+                </label>
                 <select
                   value={occupation}
                   onChange={(e) => setOccupation(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className={`w-full px-4 py-2.5 border rounded-xl text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                    getSource('occupation') === 'profile' ? 'bg-blue-50/50 border-blue-200' : 'bg-slate-50 border-slate-200'
+                  }`}
                 >
                   <option value="farmer">Farmer / Agricultural Laborer</option>
                   <option value="student">Student</option>
@@ -219,12 +243,7 @@ export default function FormPage() {
               {/* Annual Income */}
               <div>
                 <label className="block text-xs font-semibold uppercase text-slate-500 mb-1 flex items-center gap-1.5">
-                  Annual Income (₹)
-                  {isOcrField('income') && (
-                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-violet-100 text-violet-600 rounded text-[10px] font-semibold">
-                      <Sparkles className="w-2.5 h-2.5" /> OCR
-                    </span>
-                  )}
+                  Annual Income (₹) <SourceBadge fieldKey="income" />
                 </label>
                 <input
                   type="number"
@@ -232,7 +251,7 @@ export default function FormPage() {
                   value={income}
                   onChange={(e) => setIncome(e.target.value)}
                   className={`w-full px-4 py-2.5 border rounded-xl text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                    isOcrField('income') ? 'bg-violet-50 border-violet-200' : 'bg-slate-50 border-slate-200'
+                    getSource('income') === 'ocr' ? 'bg-violet-50 border-violet-200' : getSource('income') === 'profile' ? 'bg-blue-50/50 border-blue-200' : 'bg-slate-50 border-slate-200'
                   }`}
                 />
               </div>
@@ -240,18 +259,13 @@ export default function FormPage() {
               {/* Category */}
               <div>
                 <label className="block text-xs font-semibold uppercase text-slate-500 mb-1 flex items-center gap-1.5">
-                  Social Category
-                  {isOcrField('category') && (
-                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-violet-100 text-violet-600 rounded text-[10px] font-semibold">
-                      <Sparkles className="w-2.5 h-2.5" /> OCR
-                    </span>
-                  )}
+                  Social Category <SourceBadge fieldKey="category" />
                 </label>
                 <select
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
                   className={`w-full px-4 py-2.5 border rounded-xl text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                    isOcrField('category') ? 'bg-violet-50 border-violet-200' : 'bg-slate-50 border-slate-200'
+                    getSource('category') === 'ocr' ? 'bg-violet-50 border-violet-200' : getSource('category') === 'profile' ? 'bg-blue-50/50 border-blue-200' : 'bg-slate-50 border-slate-200'
                   }`}
                 >
                   <option value="general">General</option>
@@ -264,11 +278,15 @@ export default function FormPage() {
 
               {/* Education */}
               <div>
-                <label className="block text-xs font-semibold uppercase text-slate-500 mb-1">Education Level</label>
+                <label className="block text-xs font-semibold uppercase text-slate-500 mb-1 flex items-center gap-1.5">
+                  Education Level <SourceBadge fieldKey="education" />
+                </label>
                 <select
                   value={education}
                   onChange={(e) => setEducation(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className={`w-full px-4 py-2.5 border rounded-xl text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                    getSource('education') === 'profile' ? 'bg-blue-50/50 border-blue-200' : 'bg-slate-50 border-slate-200'
+                  }`}
                 >
                   <option value="below_10th">Below 10th</option>
                   <option value="10th_pass">10th Pass</option>
@@ -302,10 +320,10 @@ export default function FormPage() {
             <button
               type="submit"
               disabled={submitting}
-              className="w-full py-3.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-bold rounded-xl transition-all shadow-md hover:shadow-lg disabled:opacity-50 flex items-center justify-center gap-2"
+              className="w-full py-3.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-bold rounded-xl transition-all shadow-md hover:shadow-lg disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
             >
               {submitting ? (
-                <><Loader2 className="w-5 h-5 animate-spin" /> Analyzing {checkedCount || 66} Schemes...</>
+                <><Loader2 className="w-5 h-5 animate-spin" /> Analyzing {checkedCount || 4700} Schemes...</>
               ) : (
                 <><CheckCircle className="w-5 h-5" /> Check My Eligibility</>
               )}
