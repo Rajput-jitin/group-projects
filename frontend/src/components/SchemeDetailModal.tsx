@@ -17,7 +17,15 @@ export default function SchemeDetailModal({ scheme, onClose }: SchemeDetailModal
   const tags: string[] = details.tags || [];
   const ministry = scheme.ministry || details.nodalMinistryName || 'Government of India';
   const category = scheme.category || scheme.scheme_type || 'General';
-  const officialUrl = scheme.official_url || scheme.applyUrl || 'https://myscheme.gov.in';
+  let officialUrl = scheme.official_url || scheme.applyUrl;
+  const slug = details.slug || scheme.slug;
+  if (!officialUrl || officialUrl === 'https://myscheme.gov.in' || officialUrl === 'https://myscheme.gov.in/') {
+    if (slug) {
+      officialUrl = `https://www.myscheme.gov.in/schemes/${slug}`;
+    } else {
+      officialUrl = 'https://www.myscheme.gov.in/search';
+    }
+  }
 
   const eligibilityText = scheme.eligibility_text || details.eligibility || scheme.description;
   const documentsText = scheme.documents_text || details.documents || '';

@@ -120,27 +120,41 @@ export default function Home() {
       }
       const items = data.items || [];
 
-      const mapScheme = (s: any) => ({
-        id: s.id,
-        name: s.name,
-        ministry: s.ministry || 'Government of India',
-        category: TYPE_MAP[s.scheme_type] || 'General',
-        scheme_type: s.scheme_type,
-        benefit: s.benefits_summary || 'Financial and Social Benefits',
-        description: s.description,
-        popularity: Math.round(s.popularity_score || 85),
-        status: s.status ? s.status.charAt(0).toUpperCase() + s.status.slice(1) : 'Open',
-        applyUrl: s.official_url || 'https://myscheme.gov.in',
-        official_url: s.official_url || 'https://myscheme.gov.in',
-        details_json: s.details_json,
-        documents_text: s.documents_text,
-        process_text: s.process_text,
-        eligibility_text: s.eligibility_text,
-        min_age: s.min_age,
-        max_age: s.max_age,
-        eligible_genders: s.eligible_genders,
-        income_max: s.income_max,
-      });
+      const mapScheme = (s: any) => {
+        let targetUrl = s.official_url;
+        const slug = s.details_json?.slug;
+        
+        // If official_url is generic or missing, construct direct link to scheme page
+        if (!targetUrl || targetUrl === 'https://myscheme.gov.in' || targetUrl === 'https://myscheme.gov.in/') {
+          if (slug) {
+            targetUrl = `https://www.myscheme.gov.in/schemes/${slug}`;
+          } else {
+            targetUrl = 'https://www.myscheme.gov.in/search';
+          }
+        }
+
+        return {
+          id: s.id,
+          name: s.name,
+          ministry: s.ministry || 'Government of India',
+          category: TYPE_MAP[s.scheme_type] || 'General',
+          scheme_type: s.scheme_type,
+          benefit: s.benefits_summary || 'Financial and Social Benefits',
+          description: s.description,
+          popularity: Math.round(s.popularity_score || 85),
+          status: s.status ? s.status.charAt(0).toUpperCase() + s.status.slice(1) : 'Open',
+          applyUrl: targetUrl,
+          official_url: targetUrl,
+          details_json: s.details_json,
+          documents_text: s.documents_text,
+          process_text: s.process_text,
+          eligibility_text: s.eligibility_text,
+          min_age: s.min_age,
+          max_age: s.max_age,
+          eligible_genders: s.eligible_genders,
+          income_max: s.income_max,
+        };
+      };
 
       const mapped = items.map(mapScheme);
       setSchemes(mapped);
