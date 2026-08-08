@@ -99,34 +99,52 @@ export default function Home() {
   async function fetchSchemes() {
     setLoading(true);
     try {
-      const res = await fetch(`${BACKEND_URL}/api/schemes?page_size=60`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.items) {
-          const mapped = data.items.map((s: any) => ({
-            id: s.id,
-            name: s.name,
-            ministry: s.ministry || 'Government of India',
-            category: TYPE_MAP[s.scheme_type] || 'General',
-            scheme_type: s.scheme_type,
-            benefit: s.benefits_summary || 'Financial and Social Benefits',
-            description: s.description,
-            popularity: Math.round(s.popularity_score || 85),
-            status: s.status ? s.status.charAt(0).toUpperCase() + s.status.slice(1) : 'Open',
-            applyUrl: s.official_url || 'https://myscheme.gov.in',
-            official_url: s.official_url || 'https://myscheme.gov.in',
-            details_json: s.details_json,
-            documents_text: s.documents_text,
-            process_text: s.process_text,
-            eligibility_text: s.eligibility_text,
-            min_age: s.min_age,
-            max_age: s.max_age,
-            eligible_genders: s.eligible_genders,
-            income_max: s.income_max,
-          }));
-          setSchemes(mapped);
-        }
+      const PAGE_SIZE = 500;
+      // First fetch to get total
+      const firstRes = await fetch(`${BACKEND_URL}/api/schemes?page=1&page_size=${PAGE_SIZE}`);
+      if (!firstRes.ok) return;
+      const firstData = await firstRes.json();
+      const total: number = firstData.total || 0;
+      const totalPages = Math.ceil(total / PAGE_SIZE);
+
+      const mapScheme = (s: any) => ({
+        id: s.id,
+        name: s.name,
+        ministry: s.ministry || 'Government of India',
+        category: TYPE_MAP[s.scheme_type] || 'General',
+        scheme_type: s.scheme_type,
+        benefit: s.benefits_summary || 'Financial and Social Benefits',
+        description: s.description,
+        popularity: Math.round(s.popularity_score || 85),
+        status: s.status ? s.status.charAt(0).toUpperCase() + s.status.slice(1) : 'Open',
+        applyUrl: s.official_url || 'https://myscheme.gov.in',
+        official_url: s.official_url || 'https://myscheme.gov.in',
+        details_json: s.details_json,
+        documents_text: s.documents_text,
+        process_text: s.process_text,
+        eligibility_text: s.eligibility_text,
+        min_age: s.min_age,
+        max_age: s.max_age,
+        eligible_genders: s.eligible_genders,
+        income_max: s.income_max,
+      });
+
+      let allItems = (firstData.items || []).map(mapScheme);
+
+      // Fetch remaining pages in parallel
+      if (totalPages > 1) {
+        const pageNums = Array.from({ length: totalPages - 1 }, (_, i) => i + 2);
+        const results = await Promise.all(
+          pageNums.map(page =>
+            fetch(`${BACKEND_URL}/api/schemes?page=${page}&page_size=${PAGE_SIZE}`)
+              .then(r => r.ok ? r.json() : { items: [] })
+              .then(d => (d.items || []).map(mapScheme))
+          )
+        );
+        for (const batch of results) allItems = allItems.concat(batch);
       }
+
+      setSchemes(allItems);
     } catch (e) {
       console.warn('Backend offline, using fallback schemes', e);
     } finally {
