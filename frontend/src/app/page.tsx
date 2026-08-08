@@ -60,6 +60,7 @@ export default function Home() {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('all');
   const [selectedScheme, setSelectedScheme] = useState<any | null>(null);
+  const [displayCount, setDisplayCount] = useState(60); // how many cards to show at once
 
   // Eligibility Modal State
   const [showForm, setShowForm] = useState(false);
@@ -160,6 +161,15 @@ export default function Home() {
     const matchC = category === 'all' || s.category === category;
     return matchQ && matchC;
   });
+
+  // Reset display count whenever the category or search query changes
+  const handleCategoryChange = (newCat: string) => {
+    setCategory(newCat);
+    setDisplayCount(newCat === 'all' ? 60 : 40);
+  };
+
+  const visibleSchemes = filtered.slice(0, displayCount);
+  const hasMore = filtered.length > displayCount;
 
   async function analyzeEligibility() {
     setAnalyzing(true);
@@ -314,7 +324,7 @@ export default function Home() {
             {CATEGORIES.map((cat) => (
               <button
                 key={cat.id}
-                onClick={() => setCategory(cat.id === 'all' ? 'all' : cat.label.split(' ')[0])}
+                onClick={() => handleCategoryChange(cat.id === 'all' ? 'all' : cat.label.split(' ')[0])}
                 className={`px-4 py-2 rounded-2xl text-xs font-extrabold whitespace-nowrap transition cursor-pointer flex items-center gap-1.5 ${
                   (cat.id === 'all' && category === 'all') || category === cat.label.split(' ')[0]
                     ? 'bg-blue-600 text-white shadow-sm'
@@ -360,7 +370,8 @@ export default function Home() {
           <div>
             <h2 className="text-2xl font-black text-slate-900">Explore Government Schemes</h2>
             <p className="text-xs text-slate-500">
-              Showing {filtered.length} of {schemes.length} schemes loaded from database
+              Showing {Math.min(displayCount, filtered.length)} of {filtered.length}{category !== 'all' ? ` ${category}` : ''} schemes
+              {schemes.length > 0 && ` • ${schemes.length} total in database`}
             </p>
           </div>
         </div>
@@ -369,15 +380,38 @@ export default function Home() {
         {loading ? (
           <div className="py-20 text-center text-slate-400 font-bold">Loading government schemes database...</div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filtered.slice(0, 30).map((scheme) => (
-              <SchemeCard
-                key={scheme.id}
-                scheme={scheme}
-                onViewDetails={() => setSelectedScheme(scheme)}
-              />
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {visibleSchemes.map((scheme) => (
+                <SchemeCard
+                  key={scheme.id}
+                  scheme={scheme}
+                  onViewDetails={() => setSelectedScheme(scheme)}
+                />
+              ))}
+            </div>
+
+            {/* Load More Button */}
+            {hasMore && (
+              <div className="flex justify-center mt-10">
+                <button
+                  onClick={() => setDisplayCount((c) => c + (category === 'all' ? 60 : 40))}
+                  className="px-8 py-3 rounded-full bg-white border-2 border-blue-200 text-blue-700 font-extrabold text-sm hover:bg-blue-50 hover:border-blue-400 shadow-sm transition flex items-center gap-2"
+                >
+                  Load More Schemes ({filtered.length - Math.min(displayCount, filtered.length)} remaining)
+                </button>
+              </div>
+            )}
+
+            {/* Empty State */}
+            {filtered.length === 0 && !loading && (
+              <div className="py-20 text-center text-slate-400">
+                <div className="text-5xl mb-4">🔍</div>
+                <p className="font-bold text-slate-600">No schemes found for this filter.</p>
+                <p className="text-sm mt-1">Try a different category or search term.</p>
+              </div>
+            )}
+          </>
         )}
       </section>
 
