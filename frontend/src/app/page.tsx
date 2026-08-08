@@ -56,11 +56,12 @@ const INCOME_MAP: Record<string, number> = {
 
 export default function Home() {
   const [schemes, setSchemes] = useState<any[]>([]);
+  const [totalCount, setTotalCount] = useState<number>(4723);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('all');
   const [selectedScheme, setSelectedScheme] = useState<any | null>(null);
-  const [displayCount, setDisplayCount] = useState(60); // how many cards to show at once
+  const [displayCount, setDisplayCount] = useState(40); // how many cards to show at once
 
   // Eligibility Modal State
   const [showForm, setShowForm] = useState(false);
@@ -105,7 +106,7 @@ export default function Home() {
         (key) => TYPE_MAP[key] === cat
       );
 
-      const PAGE_SIZE = cat === 'all' ? 100 : 40;
+      const PAGE_SIZE = cat === 'all' ? 40 : 40;
       let url = `${BACKEND_URL}/api/schemes?page=${pageNum}&page_size=${PAGE_SIZE}`;
       if (cat !== 'all' && backendSchemeType) {
         url += `&scheme_type=${backendSchemeType}`;
@@ -114,6 +115,9 @@ export default function Home() {
       const res = await fetch(url);
       if (!res.ok) return;
       const data = await res.json();
+      if (data.total) {
+        setTotalCount(data.total);
+      }
       const items = data.items || [];
 
       const mapScheme = (s: any) => ({
@@ -157,7 +161,7 @@ export default function Home() {
 
   const handleCategoryChange = (newCat: string) => {
     setCategory(newCat);
-    setDisplayCount(newCat === 'all' ? 60 : 40);
+    setDisplayCount(40);
   };
 
   const visibleSchemes = filtered.slice(0, displayCount);
@@ -362,8 +366,7 @@ export default function Home() {
           <div>
             <h2 className="text-2xl font-black text-slate-900">Explore Government Schemes</h2>
             <p className="text-xs text-slate-500">
-              Showing {Math.min(displayCount, filtered.length)} of {filtered.length}{category !== 'all' ? ` ${category}` : ''} schemes
-              {schemes.length > 0 && ` • ${schemes.length} total in database`}
+              Showing {Math.min(visibleSchemes.length, filtered.length)} of {totalCount} {category !== 'all' ? category : ''} schemes loaded from database
             </p>
           </div>
         </div>
