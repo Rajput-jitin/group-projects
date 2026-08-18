@@ -23,12 +23,68 @@ from app.schemas.auth import (
     OTPSendRequest,
     OTPVerifyRequest,
     GoogleLoginRequest,
+    ForgotPasswordRequest,
+    ResetPasswordWithOTPRequest,
 )
 from app.schemas.common import Message
 from app.schemas.user import UserCreate, UserRead
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 limiter = Limiter(key_func=get_remote_address)
+
+# In-memory OTP store for demonstration/development: {email_or_mobile: otp_code}
+otp_store = {}
+
+
+@router.post("/forgot-password", response_model=Message)
+@limiter.limit("5/minute")
+def forgot_password(request: Request, payload: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    target = payload.email_or_mobile.strip()
+    user = db.query(User).filter((User.email == target) | (User.mobile == target)).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No account found with this email or mobile number",
+        )
+
+    # Generate sample 6-digit OTP (Static demo OTP 123456 for easy testing or 6-digit number)
+    otp = "123456"
+    otp_store[target] = otp
+
+    return Message(
+        message=f"OTP sent successfully to {target}. (Demo OTP is 123456)"
+    )
+
+
+@router.post("/reset-password", response_model=Message)
+@limiter.limit("5/minute")
+def reset_password(request: Request, payload: ResetPasswordWithOTPRequest, db: Session = Depends(get_db)):
+    target = payload.email_or_mobile.strip()
+    stored_otp = otp_store.get(target)
+
+    # Allow static demo OTP "123456" or matching stored OTP
+    if not stored_otp or (payload.otp != stored_otp and payload.otp != "123456"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired OTP. Please request a new one.",
+        )
+
+    user = db.query(User).filter((User.email == target) | (User.mobile == target)).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    user.password_hash = hash_password(payload.new_password)
+    db.commit()
+
+    # Clear OTP after successful reset
+    if target in otp_store:
+        del otp_store[target]
+
+    return Message(message="Password reset successfully! You can now log in with your new password.")
+
 
 
 @router.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED)
@@ -44,7 +100,7 @@ def register(request: Request, payload: UserCreate, db: Session = Depends(get_db
         full_name=payload.full_name,
         email=payload.email,
         mobile=payload.mobile,
-        password_hash=hash_password(payload.password),
+        password_hash=hash_password(payload.password[:72]), # truncating to fix the issue temporarily
         age=payload.age,
         gender=payload.gender,
         state=payload.state,

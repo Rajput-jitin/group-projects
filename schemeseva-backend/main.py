@@ -4,6 +4,14 @@ SchemeSeva AI — backend entrypoint.
 Run locally with:
     uvicorn main:app --reload
 """
+import bcrypt
+try:
+    # Passlib 1.7.4 relies on an old bcrypt attribute that was removed in bcrypt 4.0+
+    # Monkey-patch it so passlib can load successfully.
+    bcrypt.__about__ = type("about", (), {"__version__": bcrypt.__version__})
+except Exception:
+    pass
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler

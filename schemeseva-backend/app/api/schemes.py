@@ -42,7 +42,7 @@ def scheme_categories(db: Session = Depends(get_db)):
 
 
 @router.get("/{scheme_id}", response_model=SchemeRead)
-def get_scheme(scheme_id: uuid.UUID, db: Session = Depends(get_db)):
+def get_scheme(scheme_id: str, db: Session = Depends(get_db)):
     scheme = db.get(Scheme, scheme_id)
     if not scheme:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scheme not found")
@@ -54,13 +54,13 @@ def get_scheme(scheme_id: uuid.UUID, db: Session = Depends(get_db)):
 
 @router.post("/{scheme_id}/save", response_model=Message)
 def save_scheme(scheme_id: uuid.UUID, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    scheme = db.get(Scheme, scheme_id)
+    scheme = db.get(Scheme, str(scheme_id))
     if not scheme:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scheme not found")
 
     existing = (
         db.query(SavedScheme)
-        .filter(SavedScheme.user_id == current_user.id, SavedScheme.scheme_id == scheme_id)
+        .filter(SavedScheme.user_id == current_user.id, SavedScheme.scheme_id == str(scheme_id))
         .first()
     )
     if existing:

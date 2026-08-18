@@ -46,12 +46,12 @@ class SchemeStatusEnum(str, enum.Enum):
 class Scheme(Base):
     __tablename__ = "schemes"
 
-    id: Mapped[uuid.UUID] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     name: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
     ministry: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     benefits_summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    official_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    official_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     scheme_type: Mapped[SchemeTypeEnum] = mapped_column(Enum(SchemeTypeEnum), nullable=False, index=True)
     benefits_type: Mapped[BenefitTypeEnum] = mapped_column(Enum(BenefitTypeEnum), nullable=False)

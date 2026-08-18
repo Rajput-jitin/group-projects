@@ -43,6 +43,7 @@ def _build_profile(payload: EligibilityCheckRequest, user: User | None) -> dict:
         "category": pick(payload.category, "category"),
         "education": pick(payload.education, "education"),
         "disability_status": payload.disability_status if payload.disability_status is not None else (user.disability_status if user else False),
+        "documents": payload.documents or [],
     }
 
 
@@ -65,14 +66,27 @@ def check_eligibility(
     results: list[SchemeMatchResult] = []
     for scheme in schemes:
         result = evaluate_user_against_scheme(profile, scheme)
+        
+        is_central = bool(scheme.ministry and ("ministry of" in scheme.ministry.lower() or "government of india" in scheme.ministry.lower() or "central" in scheme.ministry.lower()))
+        is_dbt = bool(scheme.benefits_type == "direct_cash_transfer" or (scheme.benefits_summary and any(k in scheme.benefits_summary.lower() for k in ["dbt", "cash", "transfer", "₹"])))
+        is_offline = bool(scheme.process_text and ("offline" in scheme.process_text.lower() or "visit" in scheme.process_text.lower() or "panchayat" in scheme.process_text.lower() or "tehsil" in scheme.process_text.lower()))
+
         match = SchemeMatchResult(
             scheme_id=scheme.id,
             scheme_name=scheme.name,
             is_eligible=result.is_eligible,
             eligibility_score=result.eligibility_score,
             confidence_score=result.confidence_score,
+            ministry=scheme.ministry or "Government of India",
+            description=scheme.description,
+            scheme_type=scheme.scheme_type.value if hasattr(scheme.scheme_type, "value") else str(scheme.scheme_type),
+            level="Central Scheme" if is_central else "State Scheme",
+            dbt_eligible=is_dbt,
+            mode="Offline" if is_offline else "Online",
             missing_requirements=result.missing_requirements,
             matched_criteria=result.matched_criteria,
+            matched_documents=result.matched_documents,
+            missing_documents=result.missing_documents,
         )
         results.append(match)
 

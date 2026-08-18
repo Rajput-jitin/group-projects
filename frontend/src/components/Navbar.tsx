@@ -1,64 +1,59 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import { getToken, removeToken } from '@/lib/api';
-import { User, LogIn, LogOut, FileText, Scan, Home, BookOpen, Sparkles } from 'lucide-react';
+import { User, FileText, Scan, Home, BookOpen, Sparkles } from 'lucide-react';
 
 export default function Navbar() {
   const pathname = usePathname();
-  const router = useRouter();
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userName, setUserName] = useState('');
 
   useEffect(() => {
-    const token = getToken();
-    setIsLoggedIn(!!token);
     const userStr = typeof window !== 'undefined' ? localStorage.getItem('user') : null;
     if (userStr) {
       try {
         const u = JSON.parse(userStr);
-        setUserName(u.full_name || u.email || 'User');
+        setUserName(u.full_name || 'Citizen');
       } catch (e) {
-        setUserName('User');
+        setUserName('Citizen');
       }
+    } else {
+      setUserName('Citizen');
     }
   }, [pathname]);
 
-  const handleLogout = () => {
-    removeToken();
-    setIsLoggedIn(false);
-    router.push('/login');
-  };
-
   const navLinks = [
     { href: '/', label: 'Home', icon: Home },
-    { href: '/schemes', label: 'Schemes', icon: BookOpen },
-    { href: '/ocr', label: 'OCR Scanner', icon: Scan },
+    { href: '/schemes', label: 'Find Schemes', icon: BookOpen },
+    { href: '/ocr', label: 'Analytics & OCR', icon: Scan },
     { href: '/form', label: 'Apply Form', icon: FileText },
   ];
 
   return (
-    <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-100 shadow-sm">
+    <header className="sticky top-0 z-40 bg-slate-950/90 backdrop-blur-xl border-b border-slate-800/80 shadow-2xl">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2.5 group flex-shrink-0">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white font-bold text-xl shadow-md group-hover:scale-105 transition-transform">
-            🏛️
+        <Link href="/" className="flex items-center gap-3 group flex-shrink-0">
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-500 via-emerald-500 to-cyan-500 p-0.5 shadow-lg group-hover:scale-105 transition-transform">
+            <div className="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center font-black text-xl">
+              🏛️
+            </div>
           </div>
-          <div className="hidden sm:block">
-            <span className="text-[17px] font-extrabold bg-gradient-to-r from-blue-700 to-indigo-700 bg-clip-text text-transparent">
-              SchemeSeva <span className="text-orange-500">AI</span>
-            </span>
-            <span className="block text-[10px] tracking-wider text-gray-400 font-semibold uppercase -mt-0.5">
-              4,700+ Government Schemes
-            </span>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-lg font-black text-white tracking-tight">
+                Scheme<span className="text-amber-400">Seva</span>
+              </span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-cyan-950 text-cyan-400 border border-cyan-800/80 flex items-center gap-1 shadow-inner">
+                <Sparkles className="w-3 h-3 text-cyan-400" /> Smart Offline AI
+              </span>
+            </div>
           </div>
         </Link>
 
-        {/* Desktop Nav Links */}
-        <nav className="hidden md:flex items-center gap-0.5 flex-1 justify-center">
+        {/* Nav Links */}
+        <nav className="hidden md:flex items-center gap-1 flex-1 justify-center">
           {navLinks.map((link) => {
             const Icon = link.icon;
             const isActive = pathname === link.href;
@@ -66,10 +61,10 @@ export default function Navbar() {
               <Link
                 key={link.href}
                 href={link.href}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
                   isActive
-                    ? 'bg-blue-50 text-blue-700'
-                    : 'text-slate-600 hover:text-blue-700 hover:bg-slate-50'
+                    ? 'bg-amber-400/10 text-amber-400 border border-amber-400/30'
+                    : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900'
                 }`}
               >
                 <Icon className="w-4 h-4" />
@@ -79,49 +74,21 @@ export default function Navbar() {
           })}
         </nav>
 
-        {/* Right side */}
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {isLoggedIn ? (
-            <>
-              <Link
-                href="/profile"
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-semibold transition-all ${
-                  pathname === '/profile'
-                    ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
-              >
-                <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center text-xs font-black">
-                  {userName.charAt(0).toUpperCase() || 'U'}
-                </div>
-                <span className="hidden sm:inline">{userName.split(' ')[0]}</span>
-              </Link>
-              <button
-                onClick={handleLogout}
-                title="Logout"
-                className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
-            </>
-          ) : (
-            <>
-              <Link
-                href="/login"
-                className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50 rounded-lg transition-all"
-              >
-                <LogIn className="w-4 h-4" />
-                <span className="hidden sm:inline">Login</span>
-              </Link>
-              <Link
-                href="/register"
-                className="flex items-center gap-1.5 px-4 py-2 text-sm font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 rounded-xl shadow-sm hover:shadow-md transition-all"
-              >
-                <User className="w-4 h-4" />
-                Register
-              </Link>
-            </>
-          )}
+        {/* Right side — Profile button (always visible) */}
+        <div className="flex items-center gap-3 flex-shrink-0">
+          <Link
+            href="/profile"
+            className="flex items-center gap-2.5 px-3.5 py-1.5 rounded-2xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-slate-100 transition group shadow-sm"
+          >
+            <div className="w-7 h-7 rounded-xl bg-gradient-to-tr from-amber-500 via-emerald-500 to-cyan-500 p-0.5">
+              <div className="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center text-xs font-black text-amber-400">
+                {userName.charAt(0).toUpperCase() || 'U'}
+              </div>
+            </div>
+            <span className="text-xs font-bold text-slate-200 group-hover:text-amber-400 transition">
+              {userName.split(' ')[0] || 'Profile'}
+            </span>
+          </Link>
         </div>
       </div>
     </header>

@@ -30,3 +30,14 @@ class OTPVerifyRequest(BaseModel):
 
 class GoogleLoginRequest(BaseModel):
     id_token: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    email_or_mobile: str
+
+
+class ResetPasswordWithOTPRequest(BaseModel):
+    email_or_mobile: str
+    otp: str
+    new_password: str
+

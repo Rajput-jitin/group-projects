@@ -23,6 +23,7 @@ class EligibilityCheckRequest(BaseModel):
     category: CategoryEnum | None = None
     education: EducationEnum | None = None
     disability_status: bool | None = None
+    documents: list[str] | None = None  # user's held documents e.g. ['aadhaar', 'income_certificate', 'caste_certificate']
     scheme_id: uuid.UUID | None = None  # if set, check only this scheme
 
 
@@ -32,8 +33,16 @@ class SchemeMatchResult(BaseModel):
     is_eligible: bool
     eligibility_score: float
     confidence_score: float
-    missing_requirements: list[str]
-    matched_criteria: list[str]
+    ministry: str | None = None
+    description: str | None = None
+    scheme_type: str | None = None
+    level: str | None = None
+    dbt_eligible: bool = False
+    mode: str = "Online"
+    missing_requirements: list[str] = []
+    matched_criteria: list[str] = []
+    missing_documents: list[str] = []
+    matched_documents: list[str] = []
 
 
 class EligibilityCheckResponse(BaseModel):

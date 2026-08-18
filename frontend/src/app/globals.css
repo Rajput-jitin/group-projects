@@ -2,11 +2,9 @@
 @import "tailwindcss";
 
 :root {
-  --primary: #0055A4;
-  --primary-dark: #003e7a;
-  --secondary: #28A745;
-  --saffron: #FF9933;
-  --bg: #f8f9ff;
+  --primary: #fbbf24;
+  --primary-dark: #d97706;
+  --bg: #09090b;
 }
 
 * { box-sizing: border-box; }
@@ -14,23 +12,61 @@ html { scroll-behavior: smooth; }
 body {
   font-family: 'Inter', system-ui, sans-serif;
   background: var(--bg);
-  color: #0b1c30;
+  color: #f8fafc;
   margin: 0;
 }
 
 .glass {
-  background: rgba(255,255,255,0.7);
+  background: rgba(15, 23, 42, 0.8);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255,255,255,0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 ::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: #f1f1f1; }
-::-webkit-scrollbar-thumb { background: #c2c6d3; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #0055A4; }
+::-webkit-scrollbar-track { background: #09090b; }
+::-webkit-scrollbar-thumb { background: #27272a; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #fbbf24; }
 
 @keyframes float {
   0%,100% { transform: translateY(0); }
   50% { transform: translateY(-8px); }
+}
+
+/* ── Scheme Detail Modal / Formatted Text utilities ──────────────── */
+
+/* Smooth scrollbar for documents and long content */
+.scheme-scroll::-webkit-scrollbar { width: 4px; }
+.scheme-scroll::-webkit-scrollbar-track { background: transparent; }
+.scheme-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
+.scheme-scroll::-webkit-scrollbar-thumb:hover { background: #6366f1; }
+
+/* Animate-in for modal */
+@keyframes fadeInZoom {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+.animate-in { animation: fadeInZoom 0.2s ease-out; }
+
+/* Markdown body styles for standalone SchemeDetails page */
+.markdown-body ul { list-style-type: disc; padding-left: 1.5rem; }
+.markdown-body ol { list-style-type: decimal; padding-left: 1.5rem; }
+.markdown-body li { margin-bottom: 0.5rem; }
+.markdown-body p { margin-bottom: 0.75rem; }
+.markdown-body a.md-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.75rem;
+  background: rgba(99, 102, 241, 0.15);
+  color: #a5b4fc;
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.15s;
+}
+.markdown-body a.md-link:hover {
+  background: rgba(99, 102, 241, 0.25);
+  color: #c7d2fe;
 }

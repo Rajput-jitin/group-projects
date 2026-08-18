@@ -1,730 +1,209 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import Link from 'next/link';
+import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import SchemeDetailModal from '@/components/SchemeDetailModal';
-import { Search, Sparkles, Filter, Award, ChevronRight, MessageSquare, Bot, User, ArrowUpRight, CheckCircle2, ShieldCheck, Heart, ExternalLink } from 'lucide-react';
+import { Search, Mic, MicOff, Sparkles, ArrowRight, ShieldCheck, Award, HeartHandshake, BookOpen, GraduationCap, Sprout, Briefcase, HeartPulse, Building, Baby, Wrench, Home as HomeIcon } from 'lucide-react';
 import { getBackendUrl } from '@/lib/api';
 
-const BACKEND_URL = getBackendUrl();
-
-const CATEGORIES = [
-  { id: 'all', label: 'All Schemes', emoji: '🇮🇳' },
-  { id: 'Student', label: 'Student & Scholarships', emoji: '🎓' },
-  { id: 'Farmer', label: 'Farmers & Agriculture', emoji: '🌾' },
-  { id: 'Women', label: 'Women Welfare', emoji: '👩' },
-  { id: 'Housing', label: 'Housing & Shelter', emoji: '🏠' },
-  { id: 'Employment', label: 'Employment & Skills', emoji: '💼' },
-  { id: 'Health', label: 'Healthcare & Insurance', emoji: '🏥' },
-  { id: 'Startup', label: 'Startups & Business Loans', emoji: '🚀' },
-  { id: 'Senior Citizen', label: 'Senior Citizens & Pensions', emoji: '👴' },
+const CATEGORY_TILES = [
+  { id: 'Social Welfare', label: 'Social Welfare', icon: HeartHandshake, count: '1,240+', color: 'from-amber-500/20 to-orange-500/10 border-amber-500/30 text-amber-400' },
+  { id: 'Education', label: 'Education', icon: GraduationCap, count: '850+', color: 'from-blue-500/20 to-cyan-500/10 border-blue-500/30 text-blue-400' },
+  { id: 'Agriculture', label: 'Agriculture', icon: Sprout, count: '620+', color: 'from-emerald-500/20 to-teal-500/10 border-emerald-500/30 text-emerald-400' },
+  { id: 'Business', label: 'Business & Micro-Loans', icon: Briefcase, count: '490+', color: 'from-purple-500/20 to-indigo-500/10 border-purple-500/30 text-purple-400' },
+  { id: 'Women & Child', label: 'Women & Child', icon: Baby, count: '540+', color: 'from-pink-500/20 to-rose-500/10 border-pink-500/30 text-pink-400' },
+  { id: 'Health', label: 'Health & Healthcare', icon: HeartPulse, count: '410+', color: 'from-red-500/20 to-rose-500/10 border-red-500/30 text-red-400' },
+  { id: 'Skills', label: 'Skills & Employment', icon: Wrench, count: '380+', color: 'from-cyan-500/20 to-sky-500/10 border-cyan-500/30 text-cyan-400' },
+  { id: 'Housing', label: 'Housing & Shelter', icon: HomeIcon, count: '290+', color: 'from-violet-500/20 to-purple-500/10 border-violet-500/30 text-violet-400' },
 ];
 
-const TYPE_MAP: Record<string, string> = {
-  agriculture: 'Farmer',
-  scholarship: 'Student',
-  women_welfare: 'Women',
-  housing: 'Housing',
-  employment: 'Employment',
-  health: 'Health',
-  startup: 'Startup',
-  pension: 'Senior Citizen',
-  insurance: 'Health',
-  skill_development: 'Employment',
-};
-
-const CAT_COLORS: Record<string, string> = {
-  Student: 'bg-blue-100 text-blue-700 border-blue-200',
-  Farmer: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-  Women: 'bg-pink-100 text-pink-700 border-pink-200',
-  Housing: 'bg-amber-100 text-amber-700 border-amber-200',
-  Employment: 'bg-purple-100 text-purple-700 border-purple-200',
-  Health: 'bg-red-100 text-red-700 border-red-200',
-  Startup: 'bg-indigo-100 text-indigo-700 border-indigo-200',
-  'Senior Citizen': 'bg-slate-100 text-slate-700 border-slate-200',
-};
-
-const STATES = ['Andhra Pradesh','Bihar','Delhi','Gujarat','Haryana','Karnataka','Kerala','Madhya Pradesh','Maharashtra','Odisha','Punjab','Rajasthan','Tamil Nadu','Telangana','Uttar Pradesh','West Bengal'];
-
-const INCOME_MAP: Record<string, number> = {
-  'Below ₹1 Lakh': 50000,
-  '₹1-3 Lakh': 200000,
-  '₹3-5 Lakh': 400000,
-  '₹5-8 Lakh': 650000,
-  'Above ₹8 Lakh': 1000000,
-};
-
 export default function Home() {
-  const [schemes, setSchemes] = useState<any[]>([]);
-  const [totalCount, setTotalCount] = useState<number>(4723);
-  const [loading, setLoading] = useState(true);
-  const [query, setQuery] = useState('');
-  const [category, setCategory] = useState('all');
-  const [selectedScheme, setSelectedScheme] = useState<any | null>(null);
-  const [displayCount, setDisplayCount] = useState(40); // how many cards to show at once
+  const router = useRouter();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<any>(null);
 
-  // Eligibility Modal State
-  const [showForm, setShowForm] = useState(false);
-  const [lang, setLang] = useState<'en' | 'hi'>('en');
-  const [formStep, setFormStep] = useState(1);
-  const [profile, setProfile] = useState({
-    name: '',
-    age: '',
-    gender: '',
-    state: '',
-    occupation: '',
-    income: '',
-    category: '',
-    education: '',
-    disability: false,
-  });
-  const [results, setResults] = useState<any[] | null>(null);
-  const [analyzing, setAnalyzing] = useState(false);
+  // Handle Speech Recognition for Voice Search
+  const handleVoiceSearch = () => {
+    if (typeof window === 'undefined') return;
 
-  // Chatbot State
-  const [chatOpen, setChatOpen] = useState(false);
-  const [chatMsg, setChatMsg] = useState('');
-  const [chatLoading, setChatLoading] = useState(false);
-  const [chatHistory, setChatHistory] = useState<
-    { role: string; text: string; matched?: any[] }[]
-  >([
-    {
-      role: 'bot',
-      text: 'नमस्ते! / Hello! I am SchemeSeva AI Bot. Ask me about any government scholarship, subsidy, or scheme (e.g. "PM Kisan", "Scholarships for Girls", "Business Loans").',
-    },
-  ]);
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
-  useEffect(() => {
-    fetchSchemes(category, 1);
-  }, [category]);
+    if (!SpeechRecognition) {
+      alert('Voice recognition is not supported in this browser. Please type your query.');
+      return;
+    }
 
-  async function fetchSchemes(cat: string, pageNum: number = 1) {
-    setLoading(true);
+    if (isListening && recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {}
+      setIsListening(false);
+      return;
+    }
+
     try {
-      // Find matching scheme_type for backend filter if category is selected
-      const backendSchemeType = Object.keys(TYPE_MAP).find(
-        (key) => TYPE_MAP[key] === cat
-      );
+      const recognition = new SpeechRecognition();
+      recognitionRef.current = recognition;
+      recognition.lang = 'en-IN';
+      recognition.interimResults = false;
+      recognition.continuous = false;
 
-      const PAGE_SIZE = cat === 'all' ? 40 : 40;
-      let url = `${BACKEND_URL}/api/schemes?page=${pageNum}&page_size=${PAGE_SIZE}`;
-      if (cat !== 'all' && backendSchemeType) {
-        url += `&scheme_type=${backendSchemeType}`;
-      }
-
-      const res = await fetch(url);
-      if (!res.ok) return;
-      const data = await res.json();
-      if (data.total) {
-        setTotalCount(data.total);
-      }
-      const items = data.items || [];
-
-      const mapScheme = (s: any) => {
-        let targetUrl = s.official_url;
-        const slug = s.details_json?.slug;
-        
-        // If official_url is generic or missing, construct direct link to scheme page
-        if (!targetUrl || targetUrl === 'https://myscheme.gov.in' || targetUrl === 'https://myscheme.gov.in/') {
-          if (slug) {
-            targetUrl = `https://www.myscheme.gov.in/schemes/${slug}`;
-          } else {
-            targetUrl = 'https://www.myscheme.gov.in/search';
-          }
-        }
-
-        return {
-          id: s.id,
-          name: s.name,
-          ministry: s.ministry || 'Government of India',
-          category: TYPE_MAP[s.scheme_type] || 'General',
-          scheme_type: s.scheme_type,
-          benefit: s.benefits_summary || 'Financial and Social Benefits',
-          description: s.description,
-          popularity: Math.round(s.popularity_score || 85),
-          status: s.status ? s.status.charAt(0).toUpperCase() + s.status.slice(1) : 'Open',
-          applyUrl: targetUrl,
-          official_url: targetUrl,
-          details_json: s.details_json,
-          documents_text: s.documents_text,
-          process_text: s.process_text,
-          eligibility_text: s.eligibility_text,
-          min_age: s.min_age,
-          max_age: s.max_age,
-          eligible_genders: s.eligible_genders,
-          income_max: s.income_max,
-        };
+      recognition.onstart = () => {
+        setIsListening(true);
       };
 
-      const mapped = items.map(mapScheme);
-      setSchemes(mapped);
-    } catch (e) {
-      console.warn('Backend offline, using fallback schemes', e);
-    } finally {
-      setLoading(false);
+      recognition.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript;
+        setSearchQuery(transcript);
+        setIsListening(false);
+        // Automatically redirect with query
+        router.push(`/schemes?q=${encodeURIComponent(transcript)}`);
+      };
+
+      recognition.onerror = (event: any) => {
+        setIsListening(false);
+        if (event.error === 'not-allowed') {
+          alert('Microphone access was denied or not allowed. Please allow microphone permission in your browser URL bar to use voice search.');
+        } else if (event.error !== 'no-speech' && event.error !== 'aborted') {
+          console.warn('Speech recognition error:', event.error);
+        }
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      recognition.start();
+    } catch (err) {
+      console.error(err);
+      setIsListening(false);
     }
-  }
-
-  const filtered = schemes.filter((s) => {
-    const matchQ =
-      s.name.toLowerCase().includes(query.toLowerCase()) ||
-      s.ministry.toLowerCase().includes(query.toLowerCase()) ||
-      (s.benefit && s.benefit.toLowerCase().includes(query.toLowerCase()));
-    return matchQ;
-  });
-
-  const handleCategoryChange = (newCat: string) => {
-    setCategory(newCat);
-    setDisplayCount(40);
   };
 
-  const visibleSchemes = filtered.slice(0, displayCount);
-  const hasMore = filtered.length > displayCount;
-
-  async function analyzeEligibility() {
-    setAnalyzing(true);
-    try {
-      const response = await fetch(`${BACKEND_URL}/api/eligibility/check`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          age: parseInt(profile.age) || 25,
-          gender: profile.gender.toLowerCase() || 'male',
-          state: profile.state || 'Delhi',
-          occupation: profile.occupation.toLowerCase().replace(/\s+/g, '_') || 'student',
-          annual_income: INCOME_MAP[profile.income] || 200000,
-          category: profile.category.toLowerCase() || 'general',
-          education: profile.education.toLowerCase().replace(/\s+/g, '_') || 'college_student',
-          disability_status: !!profile.disability,
-        }),
-      });
-      const data = await response.json();
-      if (data.results) {
-        const matchedIds = data.results.filter((r: any) => r.is_eligible).map((r: any) => r.scheme_id);
-        const matchedSchemes = schemes.filter((s) => matchedIds.includes(s.id));
-        setResults(matchedSchemes.length > 0 ? matchedSchemes : schemes.slice(0, 6));
-      }
-    } catch (err) {
-      console.error('Eligibility check failed:', err);
-      setResults(schemes.slice(0, 6));
-    } finally {
-      setAnalyzing(false);
-      setShowForm(false);
-      setTimeout(() => document.getElementById('results')?.scrollIntoView({ behavior: 'smooth' }), 200);
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      router.push(`/schemes?q=${encodeURIComponent(searchQuery.trim())}`);
+    } else {
+      router.push('/schemes');
     }
-  }
+  };
 
-  async function sendChat(customQuery?: string) {
-    const messageText = customQuery || chatMsg;
-    if (!messageText.trim()) return;
-
-    setChatHistory((h) => [...h, { role: 'user', text: messageText }]);
-    if (!customQuery) setChatMsg('');
-
-    setChatLoading(true);
-    try {
-      const res = await fetch(`${BACKEND_URL}/api/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: messageText, lang }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setChatHistory((h) => [
-          ...h,
-          {
-            role: 'bot',
-            text: data.reply,
-            matched: data.matched_schemes,
-          },
-        ]);
-      } else {
-        throw new Error('Chat API response failed');
-      }
-    } catch (e) {
-      setChatHistory((h) => [
-        ...h,
-        {
-          role: 'bot',
-          text: 'I can assist you in finding government schemes! Try asking about scholarships, farmer subsidies, healthcare, or business loans.',
-        },
-      ]);
-    } finally {
-      setChatLoading(false);
-    }
-  }
+  const handleCategoryClick = (catName: string) => {
+    router.push(`/schemes?category=${encodeURIComponent(catName)}`);
+  };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
-      {/* Dynamic Detail Modal */}
-      {selectedScheme && (
-        <SchemeDetailModal scheme={selectedScheme} onClose={() => setSelectedScheme(null)} />
-      )}
-
-      {/* Hero Section */}
-      <section className="relative overflow-hidden py-16 sm:py-24 bg-gradient-to-b from-blue-50/50 via-white to-slate-50">
+    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans">
+      {/* HERO SECTION */}
+      <section className="relative overflow-hidden py-16 sm:py-24 border-b border-slate-800/80 bg-radial from-slate-900 via-slate-950 to-slate-950">
         <div className="max-w-5xl mx-auto px-4 text-center relative z-10">
-          <div className="inline-flex items-center gap-2 bg-white/80 backdrop-blur-md border border-blue-100 text-blue-700 rounded-full px-4 py-1.5 text-xs font-extrabold shadow-sm mb-6">
-            <Sparkles className="w-4 h-4 text-blue-600" />
-            <span>AI-Powered • 4,700+ Government Schemes • Instant Match</span>
+          <div className="inline-flex items-center gap-2 bg-slate-900/90 border border-slate-800 text-amber-400 rounded-full px-4 py-1.5 text-xs font-black shadow-lg mb-6">
+            <Sparkles className="w-4 h-4 text-amber-400" />
+            <span>AI-Powered Welfare Engine • 4,700+ Verified Schemes</span>
           </div>
 
-          <h1 className="text-4xl sm:text-6xl font-black text-slate-900 tracking-tight leading-[1.1] mb-6">
-            Discover Government Welfare Schemes <br />
-            <span className="bg-gradient-to-r from-blue-600 via-indigo-600 to-emerald-600 bg-clip-text text-transparent">
-              Tailored Exactly For You
+          <h1 className="text-4xl sm:text-6xl font-black text-white tracking-tight leading-[1.1] mb-6">
+            Find Government Schemes <br />
+            <span className="bg-gradient-to-r from-amber-400 via-emerald-400 to-cyan-400 bg-clip-text text-transparent">
+              Tailored For Your Rights & Needs
             </span>
           </h1>
 
-          <p className="text-base sm:text-lg text-slate-600 max-w-2xl mx-auto mb-8 leading-relaxed">
-            Search scholarships, healthcare cover, farmer subsidies, and business loans across India. Check your eligibility in seconds using AI.
+          <p className="text-base sm:text-lg text-slate-400 max-w-2xl mx-auto mb-10 leading-relaxed font-medium">
+            Instantly search subsidies, scholarships, healthcare benefits, and farmer grants across India with voice assistance and smart filters.
           </p>
 
-          <div className="flex flex-wrap items-center justify-center gap-3 mb-12">
-            <button
-              onClick={() => setShowForm(true)}
-              className="px-8 py-4 rounded-full bg-gradient-to-r from-blue-600 to-emerald-600 text-white font-extrabold text-sm sm:text-base shadow-xl hover:shadow-2xl hover:scale-105 transition cursor-pointer flex items-center gap-2"
-            >
-              <Sparkles className="w-5 h-5" /> Check My Eligibility
-            </button>
-            <a
-              href="#browse-schemes"
-              className="px-8 py-4 rounded-full bg-white border border-slate-200 text-slate-700 font-extrabold text-sm sm:text-base shadow-sm hover:bg-slate-50 transition"
-            >
-              Browse 4,700+ Schemes ↓
-            </a>
-          </div>
-
-          {/* Stats Bar */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-3xl mx-auto">
-            {[
-              { num: '4,700+', label: 'Government Schemes' },
-              { num: 'AI Engine', label: 'Eligibility Parser' },
-              { num: '<3 Sec', label: 'Match Time' },
-              { num: '100% Free', label: 'Government Portal' },
-            ].map((stat, i) => (
-              <div
-                key={i}
-                className="bg-white/70 backdrop-blur-md p-4 rounded-2xl border border-slate-200/60 shadow-sm"
-              >
-                <div className="text-xl sm:text-2xl font-black text-blue-600">{stat.num}</div>
-                <div className="text-xs font-bold text-slate-500">{stat.label}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* SEARCH & FILTER SECTION */}
-      <section id="browse-schemes" className="py-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
-        <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-100 mb-8 space-y-6">
-          <div className="relative">
-            <Search className="w-5 h-5 absolute left-4 top-4 text-slate-400" />
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search 4,700+ schemes by keyword, ministry, scholarship, or benefit (e.g. Kisan, Student, Ayushman)..."
-              className="w-full pl-12 pr-4 py-3.5 rounded-2xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50/50 font-medium"
-            />
-          </div>
-
-          {/* Category Chips */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-2">
-            {CATEGORIES.map((cat) => (
-              <button
-                key={cat.id}
-                onClick={() => handleCategoryChange(cat.id === 'all' ? 'all' : cat.label.split(' ')[0])}
-                className={`px-4 py-2 rounded-2xl text-xs font-extrabold whitespace-nowrap transition cursor-pointer flex items-center gap-1.5 ${
-                  (cat.id === 'all' && category === 'all') || category === cat.label.split(' ')[0]
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
-              >
-                <span>{cat.emoji}</span> {cat.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* AI Eligibility Results Report if active */}
-        {results && (
-          <div id="results" className="mb-12 bg-gradient-to-r from-blue-900 to-indigo-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center text-2xl">
-                🤖
-              </div>
-              <div>
-                <h3 className="text-xl font-extrabold">Your AI Eligibility Report</h3>
-                <p className="text-xs text-blue-200">
-                  Based on your profile, our AI matched <strong className="text-emerald-400">{results.length} schemes</strong> you qualify for.
-                </p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {results.map((scheme, i) => (
-                <SchemeCard
-                  key={scheme.id}
-                  scheme={scheme}
-                  onViewDetails={() => setSelectedScheme(scheme)}
-                  score={Math.max(75, 98 - i * 3)}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Schemes Grid Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h2 className="text-2xl font-black text-slate-900">Explore Government Schemes</h2>
-            <p className="text-xs text-slate-500">
-              Showing {Math.min(visibleSchemes.length, filtered.length)} of {totalCount} {category !== 'all' ? category : ''} schemes loaded from database
-            </p>
-          </div>
-        </div>
-
-        {/* Schemes Cards Grid */}
-        {loading ? (
-          <div className="py-20 text-center text-slate-400 font-bold">Loading government schemes database...</div>
-        ) : (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {visibleSchemes.map((scheme) => (
-                <SchemeCard
-                  key={scheme.id}
-                  scheme={scheme}
-                  onViewDetails={() => setSelectedScheme(scheme)}
-                />
-              ))}
-            </div>
-
-            {/* Load More Button */}
-            {hasMore && (
-              <div className="flex justify-center mt-10">
-                <button
-                  onClick={() => setDisplayCount((c) => c + (category === 'all' ? 60 : 40))}
-                  className="px-8 py-3 rounded-full bg-white border-2 border-blue-200 text-blue-700 font-extrabold text-sm hover:bg-blue-50 hover:border-blue-400 shadow-sm transition flex items-center gap-2"
-                >
-                  Load More Schemes ({filtered.length - Math.min(displayCount, filtered.length)} remaining)
-                </button>
-              </div>
-            )}
-
-            {/* Empty State */}
-            {filtered.length === 0 && !loading && (
-              <div className="py-20 text-center text-slate-400">
-                <div className="text-5xl mb-4">🔍</div>
-                <p className="font-bold text-slate-600">No schemes found for this filter.</p>
-                <p className="text-sm mt-1">Try a different category or search term.</p>
-              </div>
-            )}
-          </>
-        )}
-      </section>
-
-      {/* FLOATING AI CHATBOT DRAWER */}
-      <div className="fixed bottom-6 right-6 z-50">
-        {chatOpen && (
-          <div className="absolute bottom-16 right-0 w-80 sm:w-96 bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col h-[480px] animate-in fade-in slide-in-from-bottom-4 duration-200">
-            {/* Header */}
-            <div className="bg-gradient-to-r from-blue-700 to-emerald-600 p-4 text-white flex items-center justify-between flex-shrink-0">
-              <div className="flex items-center gap-2">
-                <Bot className="w-6 h-6" />
-                <div>
-                  <h4 className="font-extrabold text-sm">SchemeSeva AI Assistant</h4>
-                  <span className="text-[10px] text-blue-100 block">Searches 4,700+ Schemes Live</span>
-                </div>
-              </div>
-              <button
-                onClick={() => setChatOpen(false)}
-                className="text-white hover:text-slate-200 text-lg font-bold p-1 cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Chat Messages */}
-            <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-slate-50">
-              {chatHistory.map((m, idx) => (
-                <div
-                  key={idx}
-                  className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}
-                >
-                  <div
-                    className={`max-w-[85%] p-3 rounded-2xl text-xs leading-relaxed ${
-                      m.role === 'user'
-                        ? 'bg-blue-600 text-white rounded-br-none'
-                        : 'bg-white border border-slate-200 text-slate-800 rounded-bl-none shadow-sm'
-                    }`}
-                  >
-                    {m.text}
-                  </div>
-
-                  {/* Matched Scheme Cards in Chat */}
-                  {m.matched && m.matched.length > 0 && (
-                    <div className="mt-2 space-y-2 w-full">
-                      {m.matched.map((s: any) => (
-                        <div
-                          key={s.id}
-                          onClick={() => setSelectedScheme(s)}
-                          className="bg-white p-3 rounded-xl border border-blue-100 shadow-xs hover:border-blue-500 cursor-pointer transition flex items-center justify-between gap-2"
-                        >
-                          <div>
-                            <span className="text-[10px] font-bold text-blue-600 block">
-                              {s.category || s.scheme_type}
-                            </span>
-                            <span className="text-xs font-bold text-slate-900 block line-clamp-1">
-                              {s.name}
-                            </span>
-                          </div>
-                          <span className="text-[11px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-lg flex-shrink-0">
-                            Details →
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-
-              {chatLoading && (
-                <div className="text-xs text-slate-400 font-medium italic">🤖 AI is searching schemes...</div>
-              )}
-            </div>
-
-            {/* Quick Prompt Suggestions */}
-            <div className="p-2 bg-white border-t border-slate-100 flex gap-1.5 overflow-x-auto flex-shrink-0">
-              {['Scholarships', 'Farmer Subsidies', 'Health Insurance'].map((q) => (
-                <button
-                  key={q}
-                  onClick={() => sendChat(q)}
-                  className="px-2.5 py-1 bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-600 rounded-full text-[10px] font-bold whitespace-nowrap cursor-pointer transition"
-                >
-                  💡 {q}
-                </button>
-              ))}
-            </div>
-
-            {/* Input Bar */}
-            <div className="p-3 bg-white border-t border-slate-100 flex gap-2 flex-shrink-0">
+          {/* SEARCH BAR WITH VOICE SEARCH */}
+          <form onSubmit={handleSearchSubmit} className="max-w-2xl mx-auto mb-12 relative">
+            <div className="relative flex items-center bg-slate-900/90 border border-slate-700/80 hover:border-amber-400/50 rounded-3xl shadow-2xl p-2 transition">
+              <Search className="w-5 h-5 ml-4 text-slate-400 flex-shrink-0" />
               <input
                 type="text"
-                value={chatMsg}
-                onChange={(e) => setChatMsg(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && sendChat()}
-                placeholder="Ask about any scheme..."
-                className="flex-1 px-3 py-2 border border-slate-200 rounded-full text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={isListening ? "Listening... Speak your scheme query" : "Search PM Kisan, Scholarships, Ayushman, Business loans..."}
+                className="w-full px-4 py-3 bg-transparent text-slate-100 placeholder-slate-500 text-sm focus:outline-none font-medium"
               />
+
+              {/* Speak-to-Search Button */}
               <button
-                onClick={() => sendChat()}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-xs font-bold transition cursor-pointer"
+                type="button"
+                onClick={handleVoiceSearch}
+                title="Voice Search"
+                className={`p-3 rounded-2xl transition cursor-pointer flex-shrink-0 mr-1 ${
+                  isListening
+                    ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40 animate-pulse'
+                    : 'bg-slate-800 text-slate-400 hover:text-amber-400 hover:bg-slate-700'
+                }`}
               >
-                Send
+                {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+              </button>
+
+              <button
+                type="submit"
+                className="px-6 py-3 rounded-2xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-black text-xs sm:text-sm shadow-md transition cursor-pointer flex items-center gap-1.5 flex-shrink-0"
+              >
+                Search <ArrowRight className="w-4 h-4" />
               </button>
             </div>
-          </div>
-        )}
-
-        <button
-          onClick={() => setChatOpen((o) => !o)}
-          className="w-14 h-14 rounded-full bg-gradient-to-r from-blue-600 to-emerald-600 text-white shadow-2xl flex items-center justify-center text-2xl hover:scale-105 transition cursor-pointer border-2 border-white"
-        >
-          🤖
-        </button>
-      </div>
-
-      {/* ELIGIBILITY CHECKER MODAL */}
-      {showForm && (
-        <div
-          id="eligibility-modal"
-          className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-          onClick={(e) => e.target === e.currentTarget && setShowForm(false)}
-        >
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl border border-slate-100 space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-xl font-black text-slate-900">✨ AI Eligibility Checker</h3>
-                <p className="text-xs text-slate-500">Step {formStep} of 2 — Profile Details</p>
-              </div>
-              <button onClick={() => setShowForm(false)} className="text-slate-400 hover:text-slate-700 text-lg font-bold">
-                ✕
-              </button>
-            </div>
-
-            {formStep === 1 ? (
-              <div className="grid grid-cols-2 gap-4 text-xs font-bold">
-                <div className="col-span-2">
-                  <label className="block text-slate-600 mb-1">Full Name</label>
-                  <input
-                    type="text"
-                    value={profile.name}
-                    onChange={(e) => setProfile({ ...profile, name: e.target.value })}
-                    placeholder="Arjun Sharma"
-                    className="w-full p-3 rounded-xl border border-slate-200 font-normal"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-600 mb-1">Age *</label>
-                  <input
-                    type="number"
-                    value={profile.age}
-                    onChange={(e) => setProfile({ ...profile, age: e.target.value })}
-                    placeholder="25"
-                    className="w-full p-3 rounded-xl border border-slate-200 font-normal"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-600 mb-1">Gender</label>
-                  <select
-                    value={profile.gender}
-                    onChange={(e) => setProfile({ ...profile, gender: e.target.value })}
-                    className="w-full p-3 rounded-xl border border-slate-200 font-normal"
-                  >
-                    <option value="">Select...</option>
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                  </select>
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-slate-600 mb-1">State</label>
-                  <select
-                    value={profile.state}
-                    onChange={(e) => setProfile({ ...profile, state: e.target.value })}
-                    className="w-full p-3 rounded-xl border border-slate-200 font-normal"
-                  >
-                    <option value="">Select State...</option>
-                    {STATES.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-4 text-xs font-bold">
-                <div>
-                  <label className="block text-slate-600 mb-1">Occupation</label>
-                  <select
-                    value={profile.occupation}
-                    onChange={(e) => setProfile({ ...profile, occupation: e.target.value })}
-                    className="w-full p-3 rounded-xl border border-slate-200 font-normal"
-                  >
-                    <option value="">Select...</option>
-                    <option value="Student">Student</option>
-                    <option value="Farmer">Farmer</option>
-                    <option value="Business Owner">Business Owner</option>
-                    <option value="Senior Citizen">Senior Citizen</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-slate-600 mb-1">Annual Income</label>
-                  <select
-                    value={profile.income}
-                    onChange={(e) => setProfile({ ...profile, income: e.target.value })}
-                    className="w-full p-3 rounded-xl border border-slate-200 font-normal"
-                  >
-                    <option value="">Select...</option>
-                    {Object.keys(INCOME_MAP).map((inc) => (
-                      <option key={inc} value={inc}>
-                        {inc}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+            {isListening && (
+              <p className="text-xs text-rose-400 font-bold mt-2 animate-pulse">
+                🎙 Listening... Speak now (e.g., "scholarships for girls in Maharashtra")
+              </p>
             )}
+          </form>
+        </div>
+      </section>
 
-            <div className="flex gap-3 pt-2">
-              {formStep === 2 && (
-                <button
-                  onClick={() => setFormStep(1)}
-                  className="flex-1 py-3 border border-slate-200 rounded-xl font-bold text-xs hover:bg-slate-50 cursor-pointer"
-                >
-                  ← Back
-                </button>
-              )}
-              {formStep === 1 ? (
-                <button
-                  onClick={() => setFormStep(2)}
-                  className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold text-xs shadow-md hover:bg-blue-700 cursor-pointer"
-                >
-                  Next Step →
-                </button>
-              ) : (
-                <button
-                  onClick={analyzeEligibility}
-                  disabled={analyzing}
-                  className="flex-1 py-3 bg-gradient-to-r from-blue-600 to-emerald-600 text-white rounded-xl font-bold text-xs shadow-md cursor-pointer"
-                >
-                  {analyzing ? '🔄 Analyzing...' : '✨ Analyze My Eligibility'}
-                </button>
-              )}
-            </div>
+      {/* BROWSE BY CATEGORY SECTION */}
+      <section className="py-16 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">Browse by Category</h2>
+            <p className="text-xs sm:text-sm text-slate-400 mt-1">
+              Select a category to filter through all 4,700+ active government schemes
+            </p>
           </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SchemeCard({
-  scheme,
-  onViewDetails,
-  score,
-}: {
-  scheme: any;
-  onViewDetails: () => void;
-  score?: number;
-}) {
-  const badgeStyle = CAT_COLORS[scheme.category] || 'bg-slate-100 text-slate-700 border-slate-200';
-
-  return (
-    <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 hover:shadow-xl hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between">
-      <div>
-        <div className="flex items-center justify-between gap-2 mb-3">
-          <span className={`px-3 py-1 rounded-full text-[11px] font-extrabold border ${badgeStyle}`}>
-            {scheme.category}
-          </span>
-          {score ? (
-            <span className="text-xs font-black text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
-              {score}% Match
-            </span>
-          ) : (
-            <span className="text-[11px] font-bold text-slate-500">🔥 {scheme.popularity}% Popular</span>
-          )}
+          <button
+            onClick={() => router.push('/schemes')}
+            className="text-xs font-bold text-amber-400 hover:underline flex items-center gap-1 cursor-pointer"
+          >
+            View All Catalog →
+          </button>
         </div>
 
-        <h3 className="text-base font-extrabold text-slate-900 leading-snug mb-1 line-clamp-2">
-          {scheme.name}
-        </h3>
+        {/* Category Tiles Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+          {CATEGORY_TILES.map((cat) => {
+            const Icon = cat.icon;
+            return (
+              <div
+                key={cat.id}
+                onClick={() => handleCategoryClick(cat.id)}
+                className={`bg-gradient-to-br ${cat.color} bg-slate-900/90 rounded-3xl p-6 border shadow-lg hover:shadow-2xl hover:-translate-y-1 transition-all duration-200 cursor-pointer flex flex-col justify-between group`}
+              >
+                <div>
+                  <div className="w-12 h-12 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                    <Icon className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-lg font-black text-slate-100 mb-1 group-hover:text-amber-400 transition">
+                    {cat.label}
+                  </h3>
+                  <span className="text-xs font-extrabold text-slate-400 block">{cat.count} Schemes</span>
+                </div>
 
-        <p className="text-xs text-slate-500 mb-4 line-clamp-1">🏛 {scheme.ministry}</p>
-
-        <div className="p-3.5 rounded-2xl bg-slate-50/80 border border-slate-100 text-xs text-slate-800 font-semibold mb-4">
-          🎁 <span className="line-clamp-2">{scheme.benefit}</span>
+                <div className="pt-4 mt-6 border-t border-slate-800/60 flex items-center justify-between text-xs font-extrabold text-slate-400 group-hover:text-slate-200">
+                  <span>Explore Schemes</span>
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                </div>
+              </div>
+            );
+          })}
         </div>
-      </div>
-
-      <div className="flex items-center gap-2 pt-4 border-t border-slate-100 mt-auto">
-        <button
-          onClick={onViewDetails}
-          className="flex-1 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 font-bold text-xs transition cursor-pointer"
-        >
-          Details
-        </button>
-
-        <a
-          href={scheme.official_url || scheme.applyUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs text-center transition flex items-center justify-center gap-1"
-        >
-          Apply <ArrowUpRight className="w-3.5 h-3.5" />
-        </a>
-      </div>
+      </section>
     </div>
   );
 }

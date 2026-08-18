@@ -73,7 +73,7 @@ class SchemeUpdate(BaseModel):
 class SchemeRead(SchemeBase):
     model_config = ConfigDict(from_attributes=True)
 
-    id: uuid.UUID
+    id: str | uuid.UUID
     views_count: int
     applications_count: int
     popularity_score: float
@@ -85,6 +85,8 @@ class SchemeFilterParams(BaseModel):
     """Query params accepted by GET /api/schemes (all optional)."""
     q: str | None = None
     state: str | None = None
+    level: str | None = None  # All | Central | State
+    dbt: bool | None = None
     district: str | None = None
     is_rural: bool | None = None
     age: int | None = None

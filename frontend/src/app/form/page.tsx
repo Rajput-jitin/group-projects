@@ -1,8 +1,27 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ClipboardList, Sparkles, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import {
+  ChevronLeft,
+  Search,
+  Sparkles,
+  CheckCircle,
+  AlertCircle,
+  Loader2,
+  Building2,
+  Zap,
+  Globe,
+  ExternalLink,
+  ChevronDown,
+  RotateCcw,
+  User,
+  Shield,
+  FileCheck
+} from 'lucide-react';
 import { axiosInstance } from '@/lib/axiosInstance';
+import SchemeDetailModal from '@/components/SchemeDetailModal';
 
 interface SchemeResult {
   scheme_id: string;
@@ -10,104 +29,219 @@ interface SchemeResult {
   is_eligible: boolean;
   eligibility_score: number;
   confidence_score: number;
+  ministry?: string;
+  description?: string;
+  scheme_type?: string;
+  level?: string;
+  dbt_eligible?: boolean;
+  mode?: string;
   missing_requirements: string[];
   matched_criteria: string[];
+  matched_documents?: string[];
+  missing_documents?: string[];
 }
 
-const STATES = ['Andhra Pradesh','Bihar','Delhi','Gujarat','Haryana','Karnataka','Kerala','Madhya Pradesh','Maharashtra','Odisha','Punjab','Rajasthan','Tamil Nadu','Telangana','Uttar Pradesh','West Bengal'];
+const STATES_LIST = [
+  'Uttar Pradesh',
+  'Maharashtra',
+  'Delhi',
+  'Karnataka',
+  'Tamil Nadu',
+  'Gujarat',
+  'Rajasthan',
+  'Bihar',
+  'Madhya Pradesh',
+  'West Bengal',
+  'Haryana',
+  'Punjab',
+  'Andhra Pradesh',
+  'Telangana',
+  'Kerala',
+  'Odisha',
+  'Jharkhand',
+  'Assam',
+  'Chhattisgarh',
+  'Uttarakhand',
+  'Himachal Pradesh',
+  'Goa',
+  'Tripura',
+  'Manipur',
+  'Meghalaya',
+  'Mizoram',
+  'Nagaland',
+  'Sikkim',
+  'Arunachal Pradesh',
+  'Jammu and Kashmir',
+  'Ladakh',
+];
+
+const INCOME_RANGES = [
+  { label: 'Below ₹1 Lakh', value: 75000 },
+  { label: '₹1-3 Lakh', value: 200000 },
+  { label: '₹3-5 Lakh', value: 400000 },
+  { label: '₹5-10 Lakh', value: 800000 },
+  { label: 'Above ₹10 Lakh', value: 1200000 },
+];
+
+const AVAILABLE_DOCUMENTS = [
+  { id: 'aadhaar', label: 'Aadhaar Card / Voter ID / PAN' },
+  { id: 'income_certificate', label: 'Income Certificate / Salary Proof' },
+  { id: 'caste_certificate', label: 'Caste / Category Certificate (SC/ST/OBC)' },
+  { id: 'domicile_certificate', label: 'Domicile / Residence Certificate' },
+  { id: 'bank_passbook', label: 'Bank Account Passbook / Statement' },
+  { id: 'education_certificate', label: '10th / 12th / Degree Marksheet' },
+  { id: 'land_record', label: 'Farmer Card / Land Record (7/12, Khasra)' },
+  { id: 'disability_certificate', label: 'Disability (PwD / UDID) Certificate' },
+  { id: 'ration_card', label: 'Ration Card (BPL / AAY)' },
+];
 
 export default function FormPage() {
-  const [ocrSource, setOcrSource] = useState<Record<string, string>>({});
+  const router = useRouter();
 
-  // Form fields
-  const [age, setAge] = useState('25');
-  const [gender, setGender] = useState('male');
-  const [state, setState] = useState('Maharashtra');
-  const [occupation, setOccupation] = useState('farmer');
-  const [income, setIncome] = useState('150000');
-  const [category, setCategory] = useState('general');
-  const [education, setEducation] = useState('graduate');
-  const [isRural, setIsRural] = useState(false);
-  const [disability, setDisability] = useState(false);
+  // Mode tab: 'saved' | 'manual'
+  const [activeTab, setActiveTab] = useState<'manual' | 'saved'>('manual');
 
-  // Submission
+  // Form fields - no hardcoded defaults
+  const [age, setAge] = useState('');
+  const [gender, setGender] = useState('');
+  const [state, setState] = useState('');
+  const [category, setCategory] = useState('');
+  const [occupation, setOccupation] = useState('');
+  const [incomeRange, setIncomeRange] = useState('');
+  const [selectedDocs, setSelectedDocs] = useState<string[]>([]);
+
+  // Selected scheme modal
+  const [selectedScheme, setSelectedScheme] = useState<any | null>(null);
+  const [loadingSchemeDetail, setLoadingSchemeDetail] = useState(false);
+
+  // Results & pagination
   const [submitting, setSubmitting] = useState(false);
-  const [results, setResults] = useState<SchemeResult[] | null>(null);
+  const [allResults, setAllResults] = useState<SchemeResult[] | null>(null);
+  const [visibleCount, setVisibleCount] = useState(6);
   const [eligibleCount, setEligibleCount] = useState(0);
   const [checkedCount, setCheckedCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
-  // Auto-fill from localStorage on mount — OCR data takes priority over profile
+  // Load profile if available in localStorage
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    const filled: Record<string, string> = {};
-
-    // 1. Try to fill from saved user profile first
+    const autoDocs: string[] = [];
     const rawUser = localStorage.getItem('user');
     if (rawUser) {
       try {
         const user = JSON.parse(rawUser);
-        if (user.age && !isNaN(Number(user.age))) { setAge(String(user.age)); filled['age'] = 'profile'; }
-        if (user.gender) { setGender(user.gender.toLowerCase()); filled['gender'] = 'profile'; }
-        if (user.state) { setState(user.state); filled['state'] = 'profile'; }
-        if (user.annual_income) { setIncome(String(user.annual_income)); filled['income'] = 'profile'; }
-        if (user.category) { setCategory(user.category.toLowerCase()); filled['category'] = 'profile'; }
-        if (user.occupation) { setOccupation(user.occupation.toLowerCase()); filled['occupation'] = 'profile'; }
-        if (user.education) { setEducation(user.education.toLowerCase()); filled['education'] = 'profile'; }
-        if (user.disability_status !== undefined) { setDisability(Boolean(user.disability_status)); }
-      } catch { /* ignore */ }
+        if (user.age) setAge(String(user.age));
+        if (user.gender) setGender(user.gender.toLowerCase());
+        if (user.state) setState(user.state);
+        if (user.category) setCategory(user.category.toLowerCase());
+        if (user.occupation) setOccupation(user.occupation.toLowerCase());
+        if (user.annual_income) {
+          const incNum = Number(user.annual_income);
+          const matchedRange = INCOME_RANGES.reduce((prev, curr) =>
+            Math.abs(curr.value - incNum) < Math.abs(prev.value - incNum) ? curr : prev
+          );
+          if (matchedRange) setIncomeRange(matchedRange.label);
+        }
+      } catch {}
     }
 
-    // 2. OCR data overrides profile (highest priority)
     const rawOcr = localStorage.getItem('ocrData');
     if (rawOcr) {
       try {
         const data = JSON.parse(rawOcr) as Record<string, string>;
-        if (data.age && !isNaN(Number(data.age))) { setAge(data.age); filled['age'] = 'ocr'; }
-        if (data.gender) { setGender(data.gender.toLowerCase()); filled['gender'] = 'ocr'; }
-        if (data.state) { setState(data.state); filled['state'] = 'ocr'; }
-        if (data.annual_income) { setIncome(data.annual_income); filled['income'] = 'ocr'; }
-        if (data.category) { setCategory(data.category.toLowerCase()); filled['category'] = 'ocr'; }
-      } catch { /* ignore */ }
+        if (data.age) setAge(data.age);
+        if (data.gender) setGender(data.gender.toLowerCase());
+        if (data.state) setState(data.state);
+        if (data.category) setCategory(data.category.toLowerCase());
+        if (data.document_id) autoDocs.push('aadhaar');
+        if (data.annual_income) autoDocs.push('income_certificate');
+      } catch {}
     }
 
-    setOcrSource(filled);
+    if (autoDocs.length > 0) {
+      setSelectedDocs(Array.from(new Set(autoDocs)));
+    }
   }, []);
 
-  const getSource = (key: string) => ocrSource[key]; // 'ocr' | 'profile' | undefined
-
-  const SourceBadge = ({ fieldKey }: { fieldKey: string }) => {
-    const src = getSource(fieldKey);
-    if (!src) return null;
-    return src === 'ocr' ? (
-      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-violet-100 text-violet-600 rounded text-[10px] font-semibold">
-        <Sparkles className="w-2.5 h-2.5" /> OCR
-      </span>
-    ) : (
-      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-blue-100 text-blue-600 rounded text-[10px] font-semibold">
-        👤 Profile
-      </span>
+  const toggleDoc = (docId: string) => {
+    setSelectedDocs((prev) =>
+      prev.includes(docId) ? prev.filter((d) => d !== docId) : [...prev, docId]
     );
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitting(true);
-    setResults(null);
+  const handleUseSavedProfile = () => {
+    setActiveTab('saved');
+    if (typeof window === 'undefined') return;
+
+    const rawUser = localStorage.getItem('user');
+    if (rawUser) {
+      try {
+        const user = JSON.parse(rawUser);
+        if (user.age) setAge(String(user.age));
+        if (user.gender) setGender(user.gender.toLowerCase());
+        if (user.state) setState(user.state);
+        if (user.category) setCategory(user.category.toLowerCase());
+        if (user.occupation) setOccupation(user.occupation.toLowerCase());
+        if (user.annual_income) {
+          const incNum = Number(user.annual_income);
+          const matchedRange = INCOME_RANGES.reduce((prev, curr) =>
+            Math.abs(curr.value - incNum) < Math.abs(prev.value - incNum) ? curr : prev
+          );
+          if (matchedRange) setIncomeRange(matchedRange.label);
+        }
+      } catch {}
+    }
+  };
+
+  const handleReset = () => {
+    setActiveTab('manual');
+    setAge('');
+    setGender('');
+    setState('');
+    setCategory('');
+    setOccupation('');
+    setIncomeRange('');
+    setSelectedDocs([]);
+    setAllResults(null);
+    setVisibleCount(6);
     setError(null);
+  };
+
+  const handleOpenScheme = async (schemeId: string, schemeName: string) => {
+    try {
+      setLoadingSchemeDetail(true);
+      const res = await axiosInstance.get(`/api/schemes/${schemeId}`);
+      if (res.data) {
+        setSelectedScheme(res.data);
+      } else {
+        router.push(`/schemes?q=${encodeURIComponent(schemeName)}`);
+      }
+    } catch {
+      router.push(`/schemes?q=${encodeURIComponent(schemeName)}`);
+    } finally {
+      setLoadingSchemeDetail(false);
+    }
+  };
+
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setSubmitting(true);
+    setAllResults(null);
+    setVisibleCount(6);
+    setError(null);
+
+    const incomeVal = INCOME_RANGES.find((r) => r.label === incomeRange)?.value || 200000;
 
     try {
       const payload: Record<string, unknown> = {
-        age: parseInt(age, 10),
-        gender,
-        state,
-        occupation,
-        annual_income: parseFloat(income),
-        category,
-        education,
-        is_rural: isRural,
-        disability_status: disability,
+        age: age ? parseInt(age, 10) : 25,
+        gender: gender || 'male',
+        state: state || 'Uttar Pradesh',
+        occupation: occupation || 'farmer',
+        annual_income: incomeVal,
+        category: category || 'general',
+        documents: selectedDocs,
       };
 
       const res = await axiosInstance.post('/api/eligibility/check', payload);
@@ -118,7 +252,7 @@ export default function FormPage() {
           Number(b.is_eligible) - Number(a.is_eligible) || b.eligibility_score - a.eligibility_score
       );
 
-      setResults(sorted);
+      setAllResults(sorted);
       setEligibleCount(data.eligible_count ?? sorted.filter((r) => r.is_eligible).length);
       setCheckedCount(data.checked_schemes_count ?? sorted.length);
     } catch (err: any) {
@@ -132,70 +266,132 @@ export default function FormPage() {
     }
   };
 
-  const ocrCount = Object.values(ocrSource).filter(v => v === 'ocr').length;
-  const profileCount = Object.values(ocrSource).filter(v => v === 'profile').length;
+  const handleLoadMore = () => {
+    setVisibleCount((prev) => prev + 6);
+  };
+
+  const visibleResults = allResults ? allResults.slice(0, visibleCount) : [];
 
   return (
-    <div className="min-h-screen bg-slate-50 p-4 md:p-8">
-      <div className="max-w-4xl mx-auto space-y-6">
+    <div className="min-h-screen bg-[#070b14] text-slate-100 font-sans pb-20 selection:bg-indigo-500 selection:text-white">
+      {/* Scheme Detail Modal */}
+      {selectedScheme && (
+        <SchemeDetailModal scheme={selectedScheme} onClose={() => setSelectedScheme(null)} />
+      )}
 
-        {/* Header */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center">
-              <ClipboardList className="w-6 h-6" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-slate-800">Scheme Eligibility Form</h1>
-              <p className="text-sm text-slate-500">Fill in your details to discover all matching government schemes.</p>
-            </div>
-          </div>
-          {Object.keys(ocrSource).length > 0 && (
-            <div className="mt-4 p-3 bg-violet-50 border border-violet-200 rounded-xl flex items-center gap-2 text-sm text-violet-700">
-              <Sparkles className="w-4 h-4 shrink-0" />
-              <span>
-                Form auto-filled from <strong>{ocrCount > 0 ? `${ocrCount} OCR document fields` : ''}</strong>
-                {ocrCount > 0 && profileCount > 0 ? ' and ' : ''}
-                <strong>{profileCount > 0 ? `${profileCount} saved profile details` : ''}</strong>.
-                You can edit any field before submitting.
+      {/* TOP NAVBAR HEADER */}
+      <header className="border-b border-slate-800/80 bg-[#090f1d]/90 sticky top-0 z-40 backdrop-blur-md">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => router.back()}
+              className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-white transition px-2.5 py-1.5 rounded-lg hover:bg-slate-800"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              <span>Back</span>
+            </button>
+            <div className="h-4 w-[1px] bg-slate-800" />
+            <div className="flex items-center gap-2">
+              <span className="text-base sm:text-lg font-black text-white tracking-tight">Scheme Finder</span>
+              <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-950/80 text-indigo-400 border border-indigo-800/60">
+                IN India
               </span>
             </div>
-          )}
+            <span className="hidden md:inline-block text-xs text-slate-500 font-medium">
+              National Portal Index • 4,764 Schemes
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Link
+              href="/"
+              className="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition"
+            >
+              Home Search
+            </Link>
+            <Link
+              href="/schemes"
+              className="px-3.5 py-1.5 rounded-xl text-xs font-black bg-indigo-600 hover:bg-indigo-500 text-white transition shadow-sm"
+            >
+              Find Schemes
+            </Link>
+            <Link
+              href="/profile"
+              className="px-3.5 py-1.5 rounded-xl text-xs font-black bg-teal-500/10 text-teal-400 border border-teal-500/30 hover:bg-teal-500/20 transition"
+            >
+              Profile
+            </Link>
+            <div className="hidden lg:flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-[11px] font-bold text-amber-400">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+              Smart Offline AI
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* MAIN CONTAINER */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 space-y-10">
+        {/* TABS SELECTOR */}
+        <div className="flex items-center justify-center gap-2 text-xs font-extrabold">
+          <button
+            type="button"
+            onClick={handleUseSavedProfile}
+            className={`px-5 py-2.5 rounded-xl transition cursor-pointer ${
+              activeTab === 'saved'
+                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+                : 'bg-slate-900/90 text-slate-400 hover:text-slate-200 border border-slate-800'
+            }`}
+          >
+            Use my saved profile
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('manual')}
+            className={`px-5 py-2.5 rounded-xl transition cursor-pointer ${
+              activeTab === 'manual'
+                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+                : 'bg-slate-900/90 text-slate-400 hover:text-slate-200 border border-slate-800'
+            }`}
+          >
+            Enter details manually
+          </button>
+          <button
+            type="button"
+            onClick={handleReset}
+            className="px-4 py-2.5 rounded-xl bg-slate-900/90 text-slate-400 hover:text-white border border-slate-800 transition cursor-pointer flex items-center gap-1.5"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            Reset
+          </button>
         </div>
 
-        {/* Form */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
+        {/* INPUT FORM CARD */}
+        <div className="bg-[#090f1d]/90 rounded-3xl p-6 sm:p-8 border border-slate-800 shadow-2xl">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Age */}
               <div>
-                <label className="block text-xs font-semibold uppercase text-slate-500 mb-1 flex items-center gap-1.5">
-                  Age <SourceBadge fieldKey="age" />
-                </label>
+                <label className="block text-xs font-bold text-slate-400 mb-2">Age</label>
                 <input
                   type="number"
-                  min={1} max={120}
+                  min={1}
+                  max={120}
+                  placeholder="Enter age (e.g. 25)"
                   value={age}
                   onChange={(e) => setAge(e.target.value)}
-                  className={`w-full px-4 py-2.5 border rounded-xl text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                    getSource('age') === 'ocr' ? 'bg-violet-50 border-violet-200' : getSource('age') === 'profile' ? 'bg-blue-50/50 border-blue-200' : 'bg-slate-50 border-slate-200'
-                  }`}
+                  className="w-full px-4 py-3 bg-[#0c1427] border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl text-slate-100 text-sm font-semibold outline-none transition placeholder-slate-600"
                 />
               </div>
 
               {/* Gender */}
               <div>
-                <label className="block text-xs font-semibold uppercase text-slate-500 mb-1 flex items-center gap-1.5">
-                  Gender <SourceBadge fieldKey="gender" />
-                </label>
+                <label className="block text-xs font-bold text-slate-400 mb-2">Gender</label>
                 <select
                   value={gender}
                   onChange={(e) => setGender(e.target.value)}
-                  className={`w-full px-4 py-2.5 border rounded-xl text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                    getSource('gender') === 'ocr' ? 'bg-violet-50 border-violet-200' : getSource('gender') === 'profile' ? 'bg-blue-50/50 border-blue-200' : 'bg-slate-50 border-slate-200'
-                  }`}
+                  className="w-full px-4 py-3 bg-[#0c1427] border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl text-slate-100 text-sm font-semibold outline-none transition cursor-pointer"
                 >
+                  <option value="" disabled className="text-slate-600">Select Gender</option>
                   <option value="male">Male</option>
                   <option value="female">Female</option>
                   <option value="transgender">Transgender</option>
@@ -204,201 +400,235 @@ export default function FormPage() {
 
               {/* State */}
               <div>
-                <label className="block text-xs font-semibold uppercase text-slate-500 mb-1 flex items-center gap-1.5">
-                  State <SourceBadge fieldKey="state" />
-                </label>
+                <label className="block text-xs font-bold text-slate-400 mb-2">State</label>
                 <select
                   value={state}
                   onChange={(e) => setState(e.target.value)}
-                  className={`w-full px-4 py-2.5 border rounded-xl text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                    getSource('state') === 'ocr' ? 'bg-violet-50 border-violet-200' : getSource('state') === 'profile' ? 'bg-blue-50/50 border-blue-200' : 'bg-slate-50 border-slate-200'
-                  }`}
+                  className="w-full px-4 py-3 bg-[#0c1427] border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl text-slate-100 text-sm font-semibold outline-none transition cursor-pointer"
                 >
-                  {STATES.map((s) => <option key={s} value={s}>{s}</option>)}
+                  <option value="" disabled className="text-slate-600">Select State</option>
+                  {STATES_LIST.map((st) => (
+                    <option key={st} value={st}>
+                      {st}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Category */}
+              <div>
+                <label className="block text-xs font-bold text-slate-400 mb-2">Category</label>
+                <select
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  className="w-full px-4 py-3 bg-[#0c1427] border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl text-slate-100 text-sm font-semibold outline-none transition cursor-pointer"
+                >
+                  <option value="" disabled className="text-slate-600">Select Category</option>
+                  <option value="general">General</option>
+                  <option value="obc">OBC</option>
+                  <option value="sc">SC</option>
+                  <option value="st">ST</option>
+                  <option value="minority">Minority</option>
                 </select>
               </div>
 
               {/* Occupation */}
               <div>
-                <label className="block text-xs font-semibold uppercase text-slate-500 mb-1 flex items-center gap-1.5">
-                  Occupation <SourceBadge fieldKey="occupation" />
-                </label>
+                <label className="block text-xs font-bold text-slate-400 mb-2">Occupation</label>
                 <select
                   value={occupation}
                   onChange={(e) => setOccupation(e.target.value)}
-                  className={`w-full px-4 py-2.5 border rounded-xl text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                    getSource('occupation') === 'profile' ? 'bg-blue-50/50 border-blue-200' : 'bg-slate-50 border-slate-200'
-                  }`}
+                  className="w-full px-4 py-3 bg-[#0c1427] border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl text-slate-100 text-sm font-semibold outline-none transition cursor-pointer"
                 >
-                  <option value="farmer">Farmer / Agricultural Laborer</option>
+                  <option value="" disabled className="text-slate-600">Select Occupation</option>
+                  <option value="farmer">Farmer</option>
                   <option value="student">Student</option>
-                  <option value="unemployed">Unemployed / Youth</option>
-                  <option value="salaried">Salaried Employee</option>
-                  <option value="self_employed">Self Employed / Trader</option>
-                  <option value="startup_founder">Startup Founder / Entrepreneur</option>
+                  <option value="unemployed">Unemployed</option>
+                  <option value="salaried">Salaried</option>
+                  <option value="self_employed">Self Employed</option>
+                  <option value="startup_founder">Entrepreneur / Startup</option>
                   <option value="senior_citizen">Senior Citizen</option>
                 </select>
               </div>
 
               {/* Annual Income */}
               <div>
-                <label className="block text-xs font-semibold uppercase text-slate-500 mb-1 flex items-center gap-1.5">
-                  Annual Income (₹) <SourceBadge fieldKey="income" />
-                </label>
-                <input
-                  type="number"
-                  min={0}
-                  value={income}
-                  onChange={(e) => setIncome(e.target.value)}
-                  className={`w-full px-4 py-2.5 border rounded-xl text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                    getSource('income') === 'ocr' ? 'bg-violet-50 border-violet-200' : getSource('income') === 'profile' ? 'bg-blue-50/50 border-blue-200' : 'bg-slate-50 border-slate-200'
-                  }`}
-                />
-              </div>
-
-              {/* Category */}
-              <div>
-                <label className="block text-xs font-semibold uppercase text-slate-500 mb-1 flex items-center gap-1.5">
-                  Social Category <SourceBadge fieldKey="category" />
-                </label>
+                <label className="block text-xs font-bold text-slate-400 mb-2">Annual Income</label>
                 <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  className={`w-full px-4 py-2.5 border rounded-xl text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                    getSource('category') === 'ocr' ? 'bg-violet-50 border-violet-200' : getSource('category') === 'profile' ? 'bg-blue-50/50 border-blue-200' : 'bg-slate-50 border-slate-200'
-                  }`}
+                  value={incomeRange}
+                  onChange={(e) => setIncomeRange(e.target.value)}
+                  className="w-full px-4 py-3 bg-[#0c1427] border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl text-slate-100 text-sm font-semibold outline-none transition cursor-pointer"
                 >
-                  <option value="general">General</option>
-                  <option value="obc">OBC</option>
-                  <option value="sc">SC – Scheduled Caste</option>
-                  <option value="st">ST – Scheduled Tribe</option>
-                  <option value="minority">Minority</option>
-                </select>
-              </div>
-
-              {/* Education */}
-              <div>
-                <label className="block text-xs font-semibold uppercase text-slate-500 mb-1 flex items-center gap-1.5">
-                  Education Level <SourceBadge fieldKey="education" />
-                </label>
-                <select
-                  value={education}
-                  onChange={(e) => setEducation(e.target.value)}
-                  className={`w-full px-4 py-2.5 border rounded-xl text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                    getSource('education') === 'profile' ? 'bg-blue-50/50 border-blue-200' : 'bg-slate-50 border-slate-200'
-                  }`}
-                >
-                  <option value="below_10th">Below 10th</option>
-                  <option value="10th_pass">10th Pass</option>
-                  <option value="12th_pass">12th Pass</option>
-                  <option value="diploma">Diploma / ITI</option>
-                  <option value="graduate">Graduate</option>
-                  <option value="post_graduate">Post Graduate / PhD</option>
+                  <option value="" disabled className="text-slate-600">Select Annual Income</option>
+                  {INCOME_RANGES.map((inc) => (
+                    <option key={inc.label} value={inc.label}>
+                      {inc.label}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>
 
-            {/* Checkboxes */}
-            <div className="flex flex-wrap gap-5 pt-1">
-              <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-                <input type="checkbox" checked={isRural} onChange={(e) => setIsRural(e.target.checked)} className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500" />
-                Rural Area Resident
+            {/* DOCUMENTS SELECTION */}
+            <div className="pt-4 border-t border-slate-800/80">
+              <label className="block text-xs font-bold uppercase text-indigo-400 mb-2 flex items-center gap-1.5">
+                <FileCheck className="w-4 h-4 text-indigo-400" /> Documents You Currently Have (For Precise Matching):
               </label>
-              <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-                <input type="checkbox" checked={disability} onChange={(e) => setDisability(e.target.checked)} className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500" />
-                Person with Disability (Divyangjan)
-              </label>
+              <p className="text-xs text-slate-400 mb-3">
+                Check all documents in your possession to verify eligibility and document readiness against the scheme database:
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                {AVAILABLE_DOCUMENTS.map((doc) => {
+                  const isChecked = selectedDocs.includes(doc.id);
+                  return (
+                    <div
+                      key={doc.id}
+                      onClick={() => toggleDoc(doc.id)}
+                      className={`p-3 rounded-xl border cursor-pointer select-none transition-all flex items-center gap-2.5 text-xs font-bold ${
+                        isChecked
+                          ? 'bg-indigo-600/20 border-indigo-500 text-indigo-200 shadow-sm shadow-indigo-600/20 ring-1 ring-indigo-500/40'
+                          : 'bg-[#0c1427] border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-300'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          toggleDoc(doc.id);
+                        }}
+                        className="w-4 h-4 text-indigo-600 rounded accent-indigo-500 cursor-pointer pointer-events-auto shrink-0"
+                      />
+                      <span>{doc.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             {error && (
-              <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm flex items-center gap-2">
+              <div className="p-3.5 bg-red-500/10 border border-red-500/30 text-red-400 rounded-xl text-xs flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 {error}
               </div>
             )}
 
+            {/* SUBMIT BUTTON */}
             <button
               type="submit"
               disabled={submitting}
-              className="w-full py-3.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-bold rounded-xl transition-all shadow-md hover:shadow-lg disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full py-4 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white font-extrabold rounded-2xl transition shadow-lg shadow-indigo-600/25 flex items-center justify-center gap-2 cursor-pointer text-sm"
             >
               {submitting ? (
-                <><Loader2 className="w-5 h-5 animate-spin" /> Analyzing {checkedCount || 4700} Schemes...</>
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Matching 4,700+ Schemes & Documents...</span>
+                </>
               ) : (
-                <><CheckCircle className="w-5 h-5" /> Check My Eligibility</>
+                <span>Find Schemes</span>
               )}
             </button>
           </form>
         </div>
 
-        {/* Results */}
-        {results && (
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-lg font-bold text-slate-800">Your Matching Schemes</h2>
-                <p className="text-sm text-slate-500">
-                  You are eligible for{' '}
-                  <strong className="text-emerald-600">{eligibleCount}</strong>{' '}
-                  out of <strong>{checkedCount}</strong> schemes
-                </p>
-              </div>
-              <div className="w-16 h-16 flex items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700 font-bold text-xl">
-                {eligibleCount}
-              </div>
+        {/* MATCHED SCHEMES RESULTS SECTION */}
+        {allResults && (
+          <section className="space-y-6 pt-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">Matched Schemes</h2>
+              <span className="text-xs font-extrabold text-indigo-400 bg-indigo-950/80 border border-indigo-800/60 px-3 py-1.5 rounded-full">
+                {eligibleCount} Verified Matches Found
+              </span>
             </div>
 
-            <div className="space-y-3 max-h-[520px] overflow-y-auto pr-1">
-              {results.map((r) => (
+            {/* 3-COLUMN SCHEME CARDS GRID */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {visibleResults.map((scheme) => (
                 <div
-                  key={r.scheme_id}
-                  className={`rounded-xl border p-4 transition-all ${
-                    r.is_eligible
-                      ? 'bg-emerald-50 border-emerald-200'
-                      : 'bg-slate-50 border-slate-200 opacity-70'
-                  }`}
+                  key={scheme.scheme_id}
+                  onClick={() => handleOpenScheme(scheme.scheme_id, scheme.scheme_name)}
+                  className="bg-[#090f1d]/90 rounded-3xl p-6 border border-slate-800/90 hover:border-indigo-500/60 hover:shadow-2xl hover:shadow-indigo-950/40 transition-all duration-200 cursor-pointer flex flex-col justify-between group"
                 >
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-2 h-2 rounded-full shrink-0 ${r.is_eligible ? 'bg-emerald-500' : 'bg-slate-400'}`} />
-                      <h3 className="font-semibold text-slate-800 text-sm">{r.scheme_name}</h3>
+                  <div className="space-y-4">
+                    {/* Top Badges */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {scheme.level && (
+                          <span className="px-2.5 py-1 rounded-full text-[11px] font-black bg-purple-950/80 text-purple-300 border border-purple-800/60 flex items-center gap-1">
+                            <Building2 className="w-3 h-3 text-purple-400" />
+                            {scheme.level}
+                          </span>
+                        )}
+                        {scheme.dbt_eligible && (
+                          <span className="px-2.5 py-1 rounded-full text-[11px] font-black bg-emerald-950/80 text-emerald-300 border border-emerald-800/60 flex items-center gap-1">
+                            <Zap className="w-3 h-3 text-emerald-400" />
+                            DBT Eligible
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Mode indicator */}
+                      <span className="text-[10px] font-bold text-slate-500">{scheme.mode || 'Online'}</span>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {r.is_eligible && (
-                        <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-xs rounded-full font-semibold">Eligible ✓</span>
-                      )}
-                      <span className="text-xs text-slate-500 font-medium">{r.eligibility_score}%</span>
-                    </div>
+
+                    {/* Scheme Title */}
+                    <h3 className="text-base font-black text-slate-100 group-hover:text-indigo-400 transition leading-snug line-clamp-2">
+                      {scheme.scheme_name}
+                    </h3>
+
+                    {/* Ministry */}
+                    <p className="text-xs text-slate-400 flex items-center gap-1.5 font-medium">
+                      <Globe className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                      <span className="truncate">{scheme.ministry || 'Government of India'}</span>
+                    </p>
+
+                    {/* Description preview */}
+                    <p className="text-xs text-slate-400 leading-relaxed line-clamp-3 font-normal">
+                      {scheme.description || 'A welfare initiative providing direct benefits to qualified citizens.'}
+                    </p>
+
+                    {/* Document Status Indicators */}
+                    {((scheme.matched_documents?.length || 0) > 0 || (scheme.missing_documents?.length || 0) > 0) && (
+                      <div className="flex flex-wrap items-center gap-1 text-[10px] pt-2 border-t border-slate-800/80 font-bold">
+                        {scheme.matched_documents?.slice(0, 2).map((d) => (
+                          <span key={d} className="px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-400 border border-emerald-800/60">
+                            ✓ {d}
+                          </span>
+                        ))}
+                        {scheme.missing_documents?.slice(0, 1).map((d) => (
+                          <span key={d} className="px-2 py-0.5 rounded bg-amber-950/80 text-amber-400 border border-amber-800/60">
+                            ! Needs {d}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
-                  {/* Score bar */}
-                  <div className="w-full bg-slate-200 rounded-full h-1.5 mb-2">
-                    <div
-                      className={`h-1.5 rounded-full ${r.is_eligible ? 'bg-emerald-500' : 'bg-slate-400'}`}
-                      style={{ width: `${r.eligibility_score}%` }}
-                    />
+                  {/* Bottom details link */}
+                  <div className="pt-4 mt-4 border-t border-slate-800/80 flex items-center justify-between text-xs font-bold text-indigo-400 group-hover:text-indigo-300">
+                    <span>View Scheme Details & Process</span>
+                    <ExternalLink className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
                   </div>
-
-                  {r.matched_criteria && r.matched_criteria.length > 0 && (
-                    <div className="text-xs text-emerald-700 flex flex-wrap gap-1 mb-1">
-                      {r.matched_criteria.slice(0, 3).map((c) => (
-                        <span key={c} className="px-2 py-0.5 bg-emerald-100 rounded-full">{c}</span>
-                      ))}
-                    </div>
-                  )}
-                  {r.missing_requirements && r.missing_requirements.length > 0 && (
-                    <div className="text-xs text-slate-500 flex flex-wrap gap-1">
-                      {r.missing_requirements.slice(0, 2).map((m) => (
-                        <span key={m} className="px-2 py-0.5 bg-slate-100 rounded-full">Missing: {m}</span>
-                      ))}
-                    </div>
-                  )}
                 </div>
               ))}
             </div>
-          </div>
+
+            {/* LOAD MORE BUTTON */}
+            {visibleCount < allResults.length && (
+              <div className="text-center pt-6">
+                <button
+                  type="button"
+                  onClick={handleLoadMore}
+                  className="px-8 py-3.5 rounded-2xl bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-200 hover:text-white font-extrabold text-xs transition shadow-md cursor-pointer inline-flex items-center gap-2"
+                >
+                  <span>Load More Schemes</span>
+                  <ChevronDown className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+          </section>
         )}
-      </div>
+      </main>
     </div>
   );
 }

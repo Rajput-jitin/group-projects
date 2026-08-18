@@ -2,272 +2,319 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { User, Shield, FileText, CheckCircle, AlertCircle, Save, LogOut } from 'lucide-react';
-import { axiosInstance } from '@/lib/axiosInstance';
+import { User, MapPin, Briefcase, CheckCircle, AlertCircle, Save, Mail, ChevronLeft } from 'lucide-react';
+
+const STATES_LIST = [
+  'Uttar Pradesh',
+  'Maharashtra',
+  'Delhi',
+  'Karnataka',
+  'Tamil Nadu',
+  'Gujarat',
+  'Rajasthan',
+  'Bihar',
+  'Madhya Pradesh',
+  'West Bengal',
+  'Haryana',
+  'Punjab',
+  'Andhra Pradesh',
+  'Telangana',
+  'Kerala',
+  'Odisha',
+  'Jharkhand',
+  'Assam',
+  'Chhattisgarh',
+  'Uttarakhand',
+  'Himachal Pradesh',
+  'Goa',
+  'Tripura',
+  'Manipur',
+  'Meghalaya',
+  'Mizoram',
+  'Nagaland',
+  'Sikkim',
+  'Arunachal Pradesh',
+  'Jammu and Kashmir',
+  'Ladakh',
+];
+
+const INCOME_RANGES = [
+  { label: 'Below ₹1 Lakh', value: '75000' },
+  { label: '₹1-3 Lakh', value: '200000' },
+  { label: '₹3-5 Lakh', value: '400000' },
+  { label: '₹5-10 Lakh', value: '800000' },
+  { label: 'Above ₹10 Lakh', value: '1200000' },
+];
 
 export default function ProfilePage() {
   const router = useRouter();
-  const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
-  // Editable fields
+  // Editable fields - no hardcoded defaults
   const [fullName, setFullName] = useState('');
-  const [age, setAge] = useState<number | ''>('');
-  const [gender, setGender] = useState('male');
+  const [email, setEmail] = useState('');
+  const [age, setAge] = useState('');
+  const [gender, setGender] = useState('');
   const [state, setState] = useState('');
-  const [district, setDistrict] = useState('');
-  const [occupation, setOccupation] = useState('farmer');
-  const [annualIncome, setAnnualIncome] = useState<number | ''>('');
-  const [category, setCategory] = useState('general');
-  const [education, setEducation] = useState('graduate');
-  const [disabilityStatus, setDisabilityStatus] = useState(false);
+  const [category, setCategory] = useState('');
+  const [occupation, setOccupation] = useState('');
+  const [annualIncome, setAnnualIncome] = useState('');
 
   useEffect(() => {
-    fetchProfile();
+    if (typeof window === 'undefined') return;
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        if (user.full_name) setFullName(user.full_name);
+        if (user.email) setEmail(user.email);
+        if (user.age) setAge(String(user.age));
+        if (user.gender) setGender(user.gender.toLowerCase());
+        if (user.state) setState(user.state);
+        if (user.category) setCategory(user.category.toLowerCase());
+        if (user.occupation) setOccupation(user.occupation.toLowerCase());
+        if (user.annual_income) {
+          const income = Number(user.annual_income);
+          const closest = INCOME_RANGES.reduce((prev, curr) =>
+            Math.abs(Number(curr.value) - income) < Math.abs(Number(prev.value) - income) ? curr : prev
+          );
+          if (closest) setAnnualIncome(closest.value);
+        }
+      } catch (e) {
+        console.error('Failed to parse user data:', e);
+      }
+    }
+    setLoading(false);
   }, []);
 
-  const fetchProfile = async () => {
-    try {
-      setLoading(true);
-      const res = await axiosInstance.get('/api/users/me');
-      const data = res.data;
-      setProfile(data);
-
-      setFullName(data.full_name || '');
-      setAge(data.age || 25);
-      setGender(data.gender || 'male');
-      setState(data.state || '');
-      setDistrict(data.district || '');
-      setOccupation(data.occupation || 'farmer');
-      setAnnualIncome(data.annual_income || 150000);
-      setCategory(data.category || 'general');
-      setEducation(data.education || 'graduate');
-      setDisabilityStatus(data.disability_status || false);
-    } catch (err: any) {
-      setError('Please login to view your profile.');
-      setTimeout(() => {
-        router.push('/login');
-      }, 1500);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleUpdate = async (e: React.FormEvent) => {
+  const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    setSaving(true);
-    setMessage(null);
-    setError(null);
 
-    try {
-      const res = await axiosInstance.put('/api/users/me', {
-        full_name: fullName,
-        age: age ? Number(age) : undefined,
-        gender,
-        state,
-        district,
-        occupation,
-        annual_income: annualIncome ? Number(annualIncome) : undefined,
-        category,
-        education,
-        disability_status: disabilityStatus,
-      });
+    const userData = {
+      full_name: fullName,
+      email,
+      age: age ? parseInt(age, 10) : undefined,
+      gender,
+      state,
+      category,
+      occupation,
+      annual_income: annualIncome ? Number(annualIncome) : undefined,
+    };
 
-      setProfile(res.data);
-      localStorage.setItem('user', JSON.stringify(res.data));
-      setMessage('Profile updated successfully!');
-    } catch (err: any) {
-      setError('Failed to update profile.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('user');
-    router.push('/login');
+    localStorage.setItem('user', JSON.stringify(userData));
+    setMessage('Profile saved successfully!');
+    setTimeout(() => setMessage(null), 3000);
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-[#070b14] flex items-center justify-center p-4">
         <div className="text-slate-500 font-medium animate-pulse">Loading Profile...</div>
       </div>
     );
   }
 
-  return (
-    <div className="min-h-screen bg-slate-50 p-4 md:p-8">
-      <div className="max-w-4xl mx-auto space-y-6">
-        {/* Top Header Card */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 bg-indigo-100 text-indigo-700 rounded-2xl flex items-center justify-center text-xl font-bold">
-              {profile?.full_name?.charAt(0) || 'U'}
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-slate-800">{profile?.full_name || 'User Profile'}</h1>
-              <p className="text-sm text-slate-500">{profile?.email} • Verified Beneficiary</p>
-            </div>
-          </div>
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-xl font-medium text-sm transition-all"
-          >
-            <LogOut className="w-4 h-4" />
-            Logout
-          </button>
-        </div>
+  const inputClass = 'w-full px-4 py-3 bg-[#0c1427] border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl text-slate-100 text-sm font-semibold outline-none transition placeholder-slate-600';
+  const selectClass = 'w-full px-4 py-3 bg-[#0c1427] border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl text-slate-100 text-sm font-semibold outline-none transition cursor-pointer';
+  const labelClass = 'block text-sm font-semibold text-slate-300 mb-2';
 
+  return (
+    <div className="min-h-screen bg-[#070b14] text-slate-100 font-sans pb-20">
+      {/* Header */}
+      <header className="border-b border-slate-800/80 bg-[#090f1d]/90 sticky top-0 z-40 backdrop-blur-md">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => router.back()}
+              className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-white transition px-2.5 py-1.5 rounded-lg hover:bg-slate-800"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              <span>Back</span>
+            </button>
+            <div className="h-4 w-[1px] bg-slate-800" />
+            <span className="text-base sm:text-lg font-black text-white tracking-tight">My Profile</span>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
         {message && (
-          <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-sm flex items-center gap-2">
+          <div className="mb-6 p-4 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-xl text-sm flex items-center gap-2 font-semibold">
             <CheckCircle className="w-5 h-5 shrink-0" />
             <span>{message}</span>
           </div>
         )}
 
-        {error && (
-          <div className="p-4 bg-red-50 border border-red-200 text-red-800 rounded-xl text-sm flex items-center gap-2">
-            <AlertCircle className="w-5 h-5 shrink-0" />
-            <span>{error}</span>
-          </div>
-        )}
+        <form onSubmit={handleSave}>
+          <div className="bg-[#090f1d]/90 rounded-3xl p-6 sm:p-8 border border-slate-800 shadow-2xl space-y-8">
+            {/* Title */}
+            <h1 className="text-2xl font-black text-white tracking-tight">My Information</h1>
 
-        {/* Profile Edit Form */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
-          <h2 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
-            <User className="w-5 h-5 text-indigo-600" />
-            Personal & Eligibility Details
-          </h2>
+            {/* ── Personal Details ── */}
+            <div className="space-y-5">
+              <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                <User className="w-5 h-5 text-indigo-400" />
+                Personal Details
+              </h2>
 
-          <form onSubmit={handleUpdate} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold uppercase text-slate-500 mb-1">Full Name</label>
+                <label className={labelClass}>Name *</label>
                 <input
                   type="text"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  placeholder="Enter your full name"
+                  required
+                  className={inputClass}
                 />
               </div>
+
               <div>
-                <label className="block text-xs font-semibold uppercase text-slate-500 mb-1">Age</label>
+                <label className={labelClass}>
+                  <Mail className="w-4 h-4 inline mr-1.5 text-slate-400" />
+                  Email
+                </label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  className={inputClass}
+                />
+              </div>
+
+              <div>
+                <label className={labelClass}>Age</label>
                 <input
                   type="number"
+                  min={1}
+                  max={120}
                   value={age}
-                  onChange={(e) => setAge(e.target.value === '' ? '' : Number(e.target.value))}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  onChange={(e) => setAge(e.target.value)}
+                  placeholder="e.g. 20"
+                  className={inputClass}
                 />
               </div>
+
               <div>
-                <label className="block text-xs font-semibold uppercase text-slate-500 mb-1">Gender</label>
+                <label className={labelClass}>Gender</label>
                 <select
                   value={gender}
                   onChange={(e) => setGender(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className={selectClass}
                 >
+                  <option value="" disabled className="text-slate-600">Select Gender</option>
                   <option value="male">Male</option>
                   <option value="female">Female</option>
                   <option value="transgender">Transgender</option>
                 </select>
               </div>
+            </div>
+
+            {/* Divider */}
+            <div className="border-t border-slate-800/60" />
+
+            {/* ── Location & Category ── */}
+            <div className="space-y-5">
+              <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                <MapPin className="w-5 h-5 text-indigo-400" />
+                Location & Category
+              </h2>
+
               <div>
-                <label className="block text-xs font-semibold uppercase text-slate-500 mb-1">State</label>
-                <input
-                  type="text"
+                <label className={labelClass}>State *</label>
+                <select
                   value={state}
                   onChange={(e) => setState(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold uppercase text-slate-500 mb-1">Occupation</label>
-                <select
-                  value={occupation}
-                  onChange={(e) => setOccupation(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  required
+                  className={selectClass}
                 >
-                  <option value="farmer">Farmer</option>
-                  <option value="student">Student</option>
-                  <option value="unemployed">Unemployed / Youth</option>
-                  <option value="salaried">Salaried</option>
-                  <option value="self_employed">Self Employed</option>
-                  <option value="startup_founder">Startup Founder</option>
-                  <option value="senior_citizen">Senior Citizen</option>
+                  <option value="" disabled className="text-slate-600">Select State</option>
+                  {STATES_LIST.map((st) => (
+                    <option key={st} value={st}>
+                      {st}
+                    </option>
+                  ))}
                 </select>
               </div>
+
               <div>
-                <label className="block text-xs font-semibold uppercase text-slate-500 mb-1">Annual Income (₹)</label>
-                <input
-                  type="number"
-                  value={annualIncome}
-                  onChange={(e) => setAnnualIncome(e.target.value === '' ? '' : Number(e.target.value))}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold uppercase text-slate-500 mb-1">Category</label>
+                <label className={labelClass}>Category</label>
                 <select
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className={selectClass}
                 >
+                  <option value="" disabled className="text-slate-600">Select Category</option>
                   <option value="general">General</option>
                   <option value="obc">OBC</option>
                   <option value="sc">SC</option>
                   <option value="st">ST</option>
-                  <option value="minority">Minority</option>
+                  <option value="ews">EWS / Minority</option>
                 </select>
               </div>
+            </div>
+
+            {/* Divider */}
+            <div className="border-t border-slate-800/60" />
+
+            {/* ── Work & Income ── */}
+            <div className="space-y-5">
+              <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                <Briefcase className="w-5 h-5 text-indigo-400" />
+                Work & Income
+              </h2>
+
               <div>
-                <label className="block text-xs font-semibold uppercase text-slate-500 mb-1">Education Level</label>
+                <label className={labelClass}>Occupation</label>
                 <select
-                  value={education}
-                  onChange={(e) => setEducation(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  value={occupation}
+                  onChange={(e) => setOccupation(e.target.value)}
+                  className={selectClass}
                 >
-                  <option value="below_10th">Below 10th</option>
-                  <option value="10th_pass">10th Pass</option>
-                  <option value="12th_pass">12th Pass</option>
-                  <option value="diploma">Diploma</option>
-                  <option value="graduate">Graduate</option>
-                  <option value="post_graduate">Post Graduate</option>
+                  <option value="" disabled className="text-slate-600">Select Occupation</option>
+                  <option value="farmer">Farmer</option>
+                  <option value="student">Student</option>
+                  <option value="unemployed">Unemployed</option>
+                  <option value="salaried">Salaried</option>
+                  <option value="self_employed">Self Employed</option>
+                  <option value="startup_founder">Entrepreneur / Startup</option>
+                  <option value="senior_citizen">Senior Citizen</option>
+                </select>
+              </div>
+
+              <div>
+                <label className={labelClass}>Annual Income</label>
+                <select
+                  value={annualIncome}
+                  onChange={(e) => setAnnualIncome(e.target.value)}
+                  className={selectClass}
+                >
+                  <option value="" disabled className="text-slate-600">Select Annual Income</option>
+                  {INCOME_RANGES.map((inc) => (
+                    <option key={inc.value} value={inc.value}>
+                      {inc.label}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 pt-2">
-              <input
-                type="checkbox"
-                id="disability"
-                checked={disabilityStatus}
-                onChange={(e) => setDisabilityStatus(e.target.checked)}
-                className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
-              />
-              <label htmlFor="disability" className="text-sm text-slate-700 font-medium">
-                Person with Disability (Divyangjan)
-              </label>
-            </div>
-
-            <div className="pt-4 flex justify-end">
+            {/* Save Button */}
+            <div className="pt-2">
               <button
                 type="submit"
-                disabled={saving}
-                className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition-all shadow-md hover:shadow-lg disabled:opacity-50"
+                className="px-8 py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold rounded-xl transition shadow-lg shadow-indigo-600/25 flex items-center gap-2 cursor-pointer text-sm"
               >
                 <Save className="w-4 h-4" />
-                {saving ? 'Saving...' : 'Save Profile Changes'}
+                Save
               </button>
             </div>
-          </form>
-        </div>
-      </div>
+          </div>
+        </form>
+      </main>
     </div>
   );
 }

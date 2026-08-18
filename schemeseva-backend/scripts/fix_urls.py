@@ -80,7 +80,8 @@ def main():
             real_url = extract_best_url([s.process_text, s.eligibility_text, s.description])
 
             if real_url:
-                s.official_url = real_url[:500]
+                # Store the full URL — official_url is a Text column with no length limit.
+                s.official_url = real_url
                 updated_from_text += 1
             else:
                 # Use slug to construct direct scheme page on myscheme
@@ -89,10 +90,14 @@ def main():
                     slug = s.details_json.get('slug')
 
                 if slug:
+                    # Use the scheme-specific myscheme page (a real deep link, not a search dump)
                     s.official_url = f"https://www.myscheme.gov.in/schemes/{slug}"
                     updated_from_slug += 1
                 else:
-                    s.official_url = "https://www.myscheme.gov.in/search"
+                    # No real URL at all — store None so the UI shows the
+                    # "Official application link unavailable" message instead of
+                    # silently sending users to a generic search page.
+                    s.official_url = None
                     still_generic += 1
 
         db.commit()
@@ -100,14 +105,14 @@ def main():
         print(f"\n=== URL Fix Results ===")
         print(f"Updated from embedded text URLs: {updated_from_text}")
         print(f"Updated with direct scheme page (slug): {updated_from_slug}")
-        print(f"Still generic (no slug found): {still_generic}")
+        print(f"Set to None (no slug, no text URL): {still_generic}")
         print(f"Total processed: {updated_from_text + updated_from_slug + still_generic}")
 
-        # Verify: count remaining generic URLs
+        # Verify: count remaining generic/broken URLs
         remaining = db.query(Scheme).filter(
-            Scheme.official_url.in_(['https://myscheme.gov.in', 'https://myscheme.gov.in/'])
+            Scheme.official_url.in_(['https://myscheme.gov.in', 'https://myscheme.gov.in/', 'https://www.myscheme.gov.in/search'])
         ).count()
-        print(f"\nRemaining generic myscheme.gov.in URLs: {remaining}")
+        print(f"\nRemaining generic/broken myscheme URLs (should be 0): {remaining}")
 
     except Exception as e:
         db.rollback()

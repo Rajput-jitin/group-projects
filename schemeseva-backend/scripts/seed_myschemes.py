@@ -16,7 +16,7 @@ from app.database.session import engine, SessionLocal
 from app.models.scheme import Scheme, SchemeTypeEnum, BenefitTypeEnum, SchemeStatusEnum
 from app import models  # noqa: F401  (registers all models on Base.metadata)
 
-DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "myscheme_complete.json"
+DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "myscheme_cleaned.json"
 
 
 def extract_text_blocks(blocks) -> str:
@@ -172,23 +172,33 @@ def main():
             eligibility_text = str(ec.get("eligibilityDescription_md") or extract_text_blocks(ec.get("eligibilityCriteria"))).strip()
             documents_text = extract_text_blocks(doc_en.get("documents_required") or doc_en.get("documents"))
 
-            # Application Process & URL
-            official_url = str(bd.get("schemeOpenUrl") or "").strip() or None
+            # Extract official portal URL (uses clean_urls_report normalization pipeline)
+            official_url = bd.get("cleanedOfficialUrl")
+            if not official_url:
+                official_url = str(bd.get("schemeOpenUrl") or "").strip() or None
+
             proc_steps = []
             if isinstance(ap, list):
                 for p in ap:
                     if isinstance(p, dict):
-                        if not official_url and p.get("url"):
-                            url_candidate = str(p.get("url")).strip()
-                            if url_candidate and not url_candidate.startswith("http"):
-                                url_candidate = "https://" + url_candidate
-                            official_url = url_candidate
                         proc = p.get("process")
                         step_text = extract_text_blocks(proc)
                         if step_text:
                             proc_steps.append(step_text)
 
             process_text = "\n\n".join(proc_steps)
+
+            # Extra fallback guard if official_url is missing or only the generic root
+            if not official_url or official_url in ["https://myscheme.gov.in", "https://myscheme.gov.in/"]:
+                slug_val = item.get('slug')
+                if slug_val:
+                    # Scheme-specific deep link — still a real, navigable page
+                    official_url = f"https://www.myscheme.gov.in/schemes/{slug_val}"
+                else:
+                    # No usable URL at all — store None so the frontend renders
+                    # "Official application link unavailable" instead of a broken
+                    # generic search page that tells the user nothing.
+                    official_url = None
 
             scheme_type = map_scheme_type(name, detailed_desc, scheme_cat, tags)
             benefit_type = map_benefit_type(tags, benefits_summary_clean)
@@ -215,7 +225,7 @@ def main():
                 ministry=ministry[:200],
                 description=detailed_desc,
                 benefits_summary=benefits_summary_clean,
-                official_url=official_url[:500] if official_url else "https://myscheme.gov.in",
+                official_url=official_url,
                 scheme_type=scheme_type,
                 benefits_type=benefit_type,
                 status=SchemeStatusEnum.open,
