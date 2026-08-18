@@ -288,6 +288,8 @@ function SchemesContent() {
         }
       } catch (e) {
         console.warn('Backend fetch failed, falling back to local schemes database', e);
+      } finally {
+        setLoading(false);
       }
 
       // Fallback: Local Scheme dataset so Vercel never shows blank error
@@ -311,7 +313,6 @@ function SchemesContent() {
       setSchemes(paginated);
       setTotalCount(filtered.length);
       setTotalPages(Math.max(1, Math.ceil(filtered.length / pageSize)));
-      setLoading(false);
     },
     [pageSize]
   );
