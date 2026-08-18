@@ -5,7 +5,9 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import SchemeDetailModal from '@/components/SchemeDetailModal';
 import FormattedText from '@/components/FormattedText';
 import { getBackendUrl } from '@/lib/api';
-import { Search, Filter, Sparkles, ExternalLink, ChevronLeft, ChevronRight, CheckCircle2, Mic, MicOff } from 'lucide-react';
+import { SCHEMES, Scheme } from '@/lib/schemes-data';
+import { Search, Filter, Sparkles, ExternalLink, ChevronLeft, ChevronRight, CheckCircle2, Mic, MicOff, Info } from 'lucide-react';
+
 const CATEGORIES = [
   'All',
   'Social Welfare',
@@ -82,7 +84,6 @@ const TYPE_MAP: Record<string, string> = {
   skill_development: 'Skills',
 };
 
-/** Regex to pull the first https URL out of a block of text */
 const URL_IN_TEXT_RE = /https?:\/\/[^\s,)>"']+\.[a-zA-Z]{2,}[^\s,)>"']*/;
 const SKIP_DOMAINS = ['myscheme.gov.in', 'google.com', 'youtube.com', 'facebook.com'];
 
@@ -100,17 +101,13 @@ function mapScheme(s: any) {
   let targetUrl: string | null = s.official_url ?? null;
   const slug = s.details_json?.slug as string | undefined;
 
-  // 1. If missing or only the bare myscheme root, try harder.
   if (!targetUrl || targetUrl === 'https://myscheme.gov.in' || targetUrl === 'https://myscheme.gov.in/') {
-    // 2. Try to extract a real URL from the application-process text.
     const fromText = extractUrlFromText(s.process_text);
     if (fromText) {
       targetUrl = fromText;
     } else if (slug) {
-      // 3. Use the scheme-specific myscheme deep link (real page, not a search dump).
       targetUrl = `https://www.myscheme.gov.in/schemes/${slug}`;
     } else {
-      // 4. No usable URL — surface an honest null so the UI shows a clear message.
       targetUrl = null;
     }
   }
@@ -119,21 +116,44 @@ function mapScheme(s: any) {
     id: s.id,
     name: s.name,
     ministry: s.ministry || 'Government of India',
-    category: TYPE_MAP[s.scheme_type] || 'Social Welfare',
+    category: TYPE_MAP[s.scheme_type] || s.category || 'Social Welfare',
     scheme_type: s.scheme_type,
-    benefit: s.benefits_summary || 'Financial & Welfare Support',
+    benefit: s.benefits_summary || s.benefit || 'Financial & Welfare Support',
     description: s.description,
-    popularity: Math.round(s.popularity_score || 85),
+    popularity: Math.round(s.popularity_score || s.popularity || 85),
     status: s.status ? s.status.charAt(0).toUpperCase() + s.status.slice(1) : 'Open',
     official_url: targetUrl,
     details_json: s.details_json,
-    documents_text: s.documents_text,
+    documents_text: s.documents_text || (s.documents ? s.documents.join(', ') : undefined),
     process_text: s.process_text,
-    eligibility_text: s.eligibility_text,
-    min_age: s.min_age,
-    max_age: s.max_age,
-    eligible_genders: s.eligible_genders,
-    income_max: s.income_max,
+    eligibility_text: s.eligibility_text || (s.eligibility?.notes || undefined),
+    min_age: s.min_age || s.eligibility?.ageMin,
+    max_age: s.max_age || s.eligibility?.ageMax,
+    eligible_genders: s.eligible_genders || (s.eligibility?.gender ? [s.eligibility.gender] : undefined),
+    income_max: s.income_max || s.eligibility?.incomeMax,
+  };
+}
+
+function mapStaticScheme(s: Scheme) {
+  return {
+    id: s.id,
+    name: s.name,
+    ministry: s.ministry,
+    category: s.category || 'Social Welfare',
+    scheme_type: s.schemeType,
+    benefit: s.benefit,
+    description: s.description,
+    popularity: s.popularity,
+    status: s.status,
+    official_url: s.applyUrl || null,
+    details_json: null,
+    documents_text: s.documents ? s.documents.join(', ') : undefined,
+    process_text: undefined,
+    eligibility_text: s.eligibility?.notes,
+    min_age: s.eligibility?.ageMin,
+    max_age: s.eligibility?.ageMax,
+    eligible_genders: s.eligibility?.gender ? [s.eligibility.gender] : undefined,
+    income_max: s.eligibility?.incomeMax,
   };
 }
 
@@ -204,7 +224,7 @@ function SchemesContent() {
       recognition.onerror = (event: any) => {
         setIsListening(false);
         if (event.error === 'not-allowed') {
-          alert('Microphone access was denied or not allowed. Please allow microphone permission in your browser URL bar to use voice search.');
+          alert('Microphone access was denied. Please allow microphone permission in your browser to use voice search.');
         } else if (event.error !== 'no-speech' && event.error !== 'aborted') {
           console.warn('Speech recognition error:', event.error);
         }
@@ -221,7 +241,6 @@ function SchemesContent() {
     }
   };
 
-  // Sync state with URL params on mount / navigation
   useEffect(() => {
     if (queryParam !== undefined) setSearch(queryParam);
     if (categoryParam) setSelectedCat(categoryParam);
@@ -251,42 +270,67 @@ function SchemesContent() {
         if (lvl !== 'All') params.set('level', lvl);
         if (dbt) params.set('dbt', 'true');
 
-        const res = await fetch(`${backendUrl}/api/schemes?${params.toString()}`);
-        if (!res.ok) return;
-        const data = await res.json();
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
 
-        let items = (data.items || []).map(mapScheme);
+        const res = await fetch(`${backendUrl}/api/schemes?${params.toString()}`, {
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
 
-        setSchemes(items);
-        setTotalCount(data.total || items.length);
-        setTotalPages(Math.max(1, Math.ceil((data.total || items.length) / pageSize)));
+        if (res.ok) {
+          const data = await res.json();
+          let items = (data.items || []).map(mapScheme);
+          setSchemes(items);
+          setTotalCount(data.total || items.length);
+          setTotalPages(Math.max(1, Math.ceil((data.total || items.length) / pageSize)));
+          return;
+        }
       } catch (e) {
-        console.warn('Backend fetch failed', e);
-      } finally {
-        setLoading(false);
+        console.warn('Backend fetch failed, falling back to local schemes database', e);
       }
+
+      // Fallback: Local Scheme dataset so Vercel never shows blank error
+      let filtered = SCHEMES.map(mapStaticScheme);
+      if (q.trim()) {
+        const ql = q.toLowerCase();
+        filtered = filtered.filter(
+          (s) =>
+            s.name.toLowerCase().includes(ql) ||
+            s.description.toLowerCase().includes(ql) ||
+            s.ministry.toLowerCase().includes(ql) ||
+            s.benefit.toLowerCase().includes(ql)
+        );
+      }
+      if (cat !== 'All') {
+        filtered = filtered.filter((s) => s.category.toLowerCase().includes(cat.toLowerCase()));
+      }
+
+      const start = (pageNum - 1) * pageSize;
+      const paginated = filtered.slice(start, start + pageSize);
+      setSchemes(paginated);
+      setTotalCount(filtered.length);
+      setTotalPages(Math.max(1, Math.ceil(filtered.length / pageSize)));
+      setLoading(false);
     },
     [pageSize]
   );
 
-  // Trigger fetch when search or filters change; debounce search input
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    // Clear any pending debounce
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
     debounceRef.current = setTimeout(() => {
       setPage(1);
       fetchSchemes(search, selectedCat, levelFilter, selectedState, dbtOnly, 1);
-    }, 400);
+    }, 350);
 
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [search, selectedCat, levelFilter, selectedState, dbtOnly, fetchSchemes]);
 
-  // Fetch when page changes explicitly
   const handlePageChange = (newPage: number) => {
     if (newPage >= 1 && newPage <= totalPages) {
       setPage(newPage);
@@ -309,8 +353,8 @@ function SchemesContent() {
         </h1>
         <p className="text-sm sm:text-base text-slate-400 mt-3 font-medium">
           {totalCount > 0
-            ? `Showing page ${page} of ${totalPages} (${totalCount.toLocaleString()} total matching schemes)`
-            : 'Filter through 4,700+ subsidies, scholarships, healthcare benefits, and grants.'}
+            ? `Showing page ${page} of ${totalPages} (${totalCount.toLocaleString()} total schemes)`
+            : 'Filter through subsidies, scholarships, healthcare benefits, and farmer grants.'}
         </p>
       </div>
 
@@ -323,7 +367,7 @@ function SchemesContent() {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder={isListening ? "Listening... Speak your query" : "Search all 4,700+ schemes by keyword, ministry or benefit..."}
+            placeholder={isListening ? "Listening... Speak your query" : "Search all schemes by keyword, ministry or benefit..."}
             className="w-full pl-12 pr-12 py-3 rounded-2xl border border-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-slate-950 text-slate-100 placeholder-slate-500 font-medium"
           />
           <button
@@ -459,7 +503,8 @@ function SchemesContent() {
             {schemes.map((scheme) => (
               <div
                 key={scheme.id}
-                className="bg-slate-900/90 rounded-3xl p-5 border border-slate-800/80 hover:border-amber-400/50 shadow-lg hover:shadow-2xl transition flex flex-col justify-between"
+                onClick={() => setSelectedScheme(scheme)}
+                className="bg-slate-900/90 rounded-3xl p-5 border border-slate-800/80 hover:border-amber-400/50 shadow-lg hover:shadow-2xl transition flex flex-col justify-between cursor-pointer group"
               >
                 <div>
                   <div className="flex items-center justify-between gap-2 mb-3">
@@ -471,7 +516,7 @@ function SchemesContent() {
                     </span>
                   </div>
 
-                  <h3 className="text-sm font-black text-white leading-snug mb-1 line-clamp-2">
+                  <h3 className="text-sm font-black text-white leading-snug mb-1 line-clamp-2 group-hover:text-amber-400 transition">
                     {scheme.name}
                   </h3>
                   <p className="text-[11px] text-slate-400 mb-3 line-clamp-1">🏛 {scheme.ministry}</p>
@@ -483,28 +528,37 @@ function SchemesContent() {
 
                 <div className="flex items-center gap-2 pt-3 border-t border-slate-800/80 mt-auto">
                   <button
-                    onClick={() => setSelectedScheme(scheme)}
-                    className="flex-1 py-2 rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 text-slate-200 font-bold text-xs transition cursor-pointer"
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedScheme(scheme);
+                    }}
+                    className="flex-1 py-2 rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 text-slate-200 font-bold text-xs transition cursor-pointer flex items-center justify-center gap-1"
                   >
-                    Details
+                    <Info className="w-3.5 h-3.5 text-amber-400" /> Details
                   </button>
 
-                  {scheme.official_url ? (
+                  {scheme.official_url && scheme.official_url.startsWith('http') ? (
                     <a
                       href={scheme.official_url}
                       target="_blank"
                       rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
                       className="flex-1 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs text-center transition flex items-center justify-center gap-1"
                     >
                       Apply <ExternalLink className="w-3 h-3" />
                     </a>
                   ) : (
-                    <span
-                      title="Official application link unavailable for this scheme"
-                      className="flex-1 py-2 rounded-xl bg-slate-800 text-slate-500 font-black text-xs text-center cursor-not-allowed select-none flex items-center justify-center gap-1"
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedScheme(scheme);
+                      }}
+                      className="flex-1 py-2 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 font-bold text-xs text-center transition flex items-center justify-center gap-1 cursor-pointer"
                     >
-                      Link Unavailable
-                    </span>
+                      View Guide
+                    </button>
                   )}
                 </div>
               </div>
@@ -516,7 +570,7 @@ function SchemesContent() {
             <button
               disabled={page <= 1}
               onClick={() => handlePageChange(page - 1)}
-              className="px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs font-bold text-slate-200 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition flex items-center gap-1"
+              className="px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs font-bold text-slate-200 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition flex items-center gap-1 cursor-pointer"
             >
               <ChevronLeft className="w-4 h-4" /> Previous Page
             </button>
@@ -528,7 +582,7 @@ function SchemesContent() {
             <button
               disabled={page >= totalPages}
               onClick={() => handlePageChange(page + 1)}
-              className="px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs font-bold text-slate-200 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition flex items-center gap-1"
+              className="px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs font-bold text-slate-200 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition flex items-center gap-1 cursor-pointer"
             >
               Next Page <ChevronRight className="w-4 h-4" />
             </button>
