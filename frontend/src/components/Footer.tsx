@@ -19,17 +19,17 @@ export default function Footer() {
           <ul className="space-y-2 text-xs">
             <li><Link href="/" className="hover:text-white transition">Home</Link></li>
             <li><Link href="/schemes" className="hover:text-white transition">All Schemes</Link></li>
-            <li><Link href="/scan" className="hover:text-white transition">OCR Document Scanner</Link></li>
+            <li><Link href="/ocr" className="hover:text-white transition">OCR Document Scanner</Link></li>
             <li><Link href="/form" className="hover:text-white transition">Smart Form Auto-Fill</Link></li>
           </ul>
         </div>
 
         <div>
-          <h4 className="text-sm font-semibold text-white uppercase tracking-wider mb-3">User Portal</h4>
+          <h4 className="text-sm font-semibold text-white uppercase tracking-wider mb-3">Citizen Services</h4>
           <ul className="space-y-2 text-xs">
-            <li><Link href="/login" className="hover:text-white transition">Login</Link></li>
-            <li><Link href="/register" className="hover:text-white transition">Create Account</Link></li>
             <li><Link href="/profile" className="hover:text-white transition">My Profile</Link></li>
+            <li><Link href="/form" className="hover:text-white transition">Eligibility Checker</Link></li>
+            <li><Link href="/schemes" className="hover:text-white transition">Scheme Catalog</Link></li>
           </ul>
         </div>
 
